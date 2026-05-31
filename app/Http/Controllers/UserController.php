@@ -15,6 +15,7 @@ class UserController extends Controller
     public function index()
     {
         $users = User::with('roles')
+            ->visible()
             ->where('has_system_access', true)
             ->orderByDesc('is_active')
             ->orderBy('name')

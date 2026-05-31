@@ -27,6 +27,20 @@ class AppServiceProvider extends ServiceProvider
         // dev installs that set things the old way.
         $this->loadBuyerLicenseConfig();
 
+        // Login activity log (IP + country) + failed/logout tracking.
+        Event::listen(\Illuminate\Auth\Events\Login::class, function ($event) {
+            app(\App\Services\LoginActivityRecorder::class)
+                ->record('login', $event->user?->id, $event->user?->email);
+        });
+        Event::listen(\Illuminate\Auth\Events\Failed::class, function ($event) {
+            app(\App\Services\LoginActivityRecorder::class)
+                ->record('failed', null, $event->credentials['email'] ?? null);
+        });
+        Event::listen(\Illuminate\Auth\Events\Logout::class, function ($event) {
+            app(\App\Services\LoginActivityRecorder::class)
+                ->record('logout', $event->user?->id, $event->user?->email);
+        });
+
         // Admin email notifications — fire when key domain models change
         \App\Models\Patient::observe(\App\Observers\PatientObserver::class);
         \App\Models\Encounter::observe(\App\Observers\EncounterObserver::class);

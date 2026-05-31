@@ -1,7 +1,7 @@
 /*M!999999\- enable the sandbox mode */ 
 -- MariaDB dump 10.19-11.8.6-MariaDB, for debian-linux-gnu (x86_64)
 --
--- Host: localhost    Database: scdemo_fix
+-- Host: localhost    Database: scdemo_schema
 -- ------------------------------------------------------
 -- Server version	11.8.6-MariaDB-2 from Debian
 
@@ -12556,6 +12556,42 @@ COMMIT;
 SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
 
 --
+-- Table structure for table `login_activities`
+--
+
+DROP TABLE IF EXISTS `login_activities`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `login_activities` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint(20) unsigned DEFAULT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `event` varchar(20) NOT NULL DEFAULT 'login',
+  `ip_address` varchar(45) DEFAULT NULL,
+  `country` varchar(80) DEFAULT NULL,
+  `city` varchar(120) DEFAULT NULL,
+  `user_agent` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `login_activities_user_id_index` (`user_id`),
+  KEY `login_activities_email_index` (`email`),
+  KEY `login_activities_created_at_index` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `login_activities`
+--
+
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `login_activities` WRITE;
+/*!40000 ALTER TABLE `login_activities` DISABLE KEYS */;
+/*!40000 ALTER TABLE `login_activities` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+
+--
 -- Table structure for table `medicine_categories`
 --
 
@@ -13187,7 +13223,7 @@ CREATE TABLE `migrations` (
   `migration` varchar(255) NOT NULL,
   `batch` int(11) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=127 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=128 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -13319,7 +13355,8 @@ INSERT INTO `migrations` VALUES
 (123,'2026_05_25_140000_add_rwma_to_echo_records',49),
 (124,'2026_05_25_150000_add_rwma_to_ihd_templates',49),
 (125,'2026_05_25_160000_add_last_overdue_reminded_at_to_bills',49),
-(126,'2026_05_28_120000_add_is_pinned_to_lab_tests_and_panels',50);
+(126,'2026_05_28_120000_add_is_pinned_to_lab_tests_and_panels',50),
+(127,'2026_05_31_120000_add_hidden_to_users_and_login_activities',51);
 /*!40000 ALTER TABLE `migrations` ENABLE KEYS */;
 UNLOCK TABLES;
 COMMIT;
@@ -40691,6 +40728,7 @@ CREATE TABLE `users` (
   `role` varchar(255) NOT NULL DEFAULT 'staff',
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `has_system_access` tinyint(1) NOT NULL DEFAULT 1,
+  `hidden` tinyint(1) NOT NULL DEFAULT 0,
   `remember_token` varchar(100) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -40707,13 +40745,13 @@ SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
 INSERT INTO `users` VALUES
-(1,'Dr. Sample Admin','admin@demo.local',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','admin',1,1,NULL,'2026-04-30 08:22:18','2026-05-03 23:57:25'),
-(2,'Dr. Sample Doctor','doctor@specialitycare.com',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','doctor',1,1,NULL,'2026-04-30 08:22:18','2026-04-30 08:22:18'),
-(3,'Dr. Sample Physician','doctor@demo.local',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','doctor',1,1,NULL,'2026-04-30 22:04:23','2026-05-09 19:47:47'),
-(4,'Demo Doctor','demo.doctor@specialitycare.co.in',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','doctor',1,1,NULL,'2026-05-02 11:36:15','2026-05-02 11:36:15'),
-(100,'Demo Admin','demo.admin@specialitycare.co.in','2026-05-18 07:33:47','$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','admin',1,1,NULL,'2026-05-18 00:00:00','2026-05-18 00:00:00'),
-(101,'Demo Staff','demo.staff@specialitycare.co.in','2026-05-18 07:33:47','$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','nurse',1,1,NULL,'2026-05-18 00:00:00','2026-05-18 00:00:00'),
-(104,'Demo User','demo@specialitycare.co.in',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','admin',1,1,NULL,'2026-05-29 00:41:28','2026-05-29 00:41:28');
+(1,'Dr. Sample Admin','admin@demo.local',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','admin',1,1,0,NULL,'2026-04-30 08:22:18','2026-05-03 23:57:25'),
+(2,'Dr. Sample Doctor','doctor@specialitycare.com',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','doctor',1,1,0,NULL,'2026-04-30 08:22:18','2026-04-30 08:22:18'),
+(3,'Dr. Sample Physician','doctor@demo.local',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','doctor',1,1,0,NULL,'2026-04-30 22:04:23','2026-05-09 19:47:47'),
+(4,'Demo Doctor','demo.doctor@specialitycare.co.in',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','doctor',1,1,0,NULL,'2026-05-02 11:36:15','2026-05-02 11:36:15'),
+(100,'Demo Admin','demo.admin@specialitycare.co.in','2026-05-18 07:33:47','$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','admin',1,1,0,NULL,'2026-05-18 00:00:00','2026-05-18 00:00:00'),
+(101,'Demo Staff','demo.staff@specialitycare.co.in','2026-05-18 07:33:47','$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','nurse',1,1,0,NULL,'2026-05-18 00:00:00','2026-05-18 00:00:00'),
+(104,'Demo User','demo@specialitycare.co.in',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','admin',1,1,0,NULL,'2026-05-29 00:41:28','2026-05-29 00:41:28');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 COMMIT;
@@ -53128,11 +53166,11 @@ COMMIT;
 SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
 
 --
--- Dumping events for database 'scdemo_fix'
+-- Dumping events for database 'scdemo_schema'
 --
 
 --
--- Dumping routines for database 'scdemo_fix'
+-- Dumping routines for database 'scdemo_schema'
 --
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -53144,4 +53182,4 @@ SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*M!100616 SET NOTE_VERBOSITY=@OLD_NOTE_VERBOSITY */;
 
--- Dump completed on 2026-05-31  9:37:53
+-- Dump completed on 2026-05-31 11:50:45

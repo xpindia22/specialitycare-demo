@@ -15,7 +15,7 @@ class StaffController extends Controller
 
         // Build a unified people list — staff + doctors. Each row carries
         // the bits the view needs without leaking model differences.
-        $staff = Staff::with('user')->orderBy('first_name')->get()->map(fn ($s) => (object) [
+        $staff = Staff::with('user')->whereDoesntHave('user', fn ($q) => \App\Models\User::scopeHiddenFilter($q))->orderBy('first_name')->get()->map(fn ($s) => (object) [
             'kind'         => 'staff',
             'edit_url'     => route('staff.edit', $s),
             'code'         => $s->staff_id,
@@ -28,7 +28,7 @@ class StaffController extends Controller
             'user'         => $s->user,
         ]);
 
-        $doctors = Doctor::with('user')->orderBy('first_name')->get()->map(fn ($d) => (object) [
+        $doctors = Doctor::with('user')->whereDoesntHave('user', fn ($q) => \App\Models\User::scopeHiddenFilter($q))->orderBy('first_name')->get()->map(fn ($d) => (object) [
             'kind'         => 'doctor',
             'edit_url'     => route('doctors.edit', $d),
             'code'         => $d->doctor_id,

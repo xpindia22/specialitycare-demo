@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', ('Demo Clinic')) — {{ config('app.name') }}</title>
+    <title>@yield('title', ('James Health Care')) — {{ config('app.name') }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
@@ -654,7 +654,7 @@
     <div class="sidebar-brand">
         <div class="brand-icon"><i class="fa-solid fa-heart-pulse"></i></div>
         <div class="brand-text">
-            <strong>{{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}</strong>
+            <strong>{{ setting('clinic_name', 'James Health Care Pvt. Ltd.') }}</strong>
             <span>Hospital Management</span>
         </div>
     </div>
@@ -1171,7 +1171,7 @@
     </div>
     <div class="sidebar-footer">
         <div style="font-size:11px; margin-bottom:4px;">{{ now()->format('D, d M Y') }}</div>
-        <div>v1.0.0 &nbsp;·&nbsp; {{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}</div>
+        <div>v1.0.0 &nbsp;·&nbsp; {{ setting('clinic_name', 'James Health Care Pvt. Ltd.') }}</div>
     </div>
 </aside>
 
