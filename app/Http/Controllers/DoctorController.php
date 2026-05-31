@@ -12,9 +12,7 @@ use Illuminate\Support\Facades\Hash;
 
 class DoctorController extends Controller {
     public function index() {
-        $doctors = Doctor::with("user","department")
-            ->whereDoesntHave('user', fn ($q) => \App\Models\User::scopeHiddenFilter($q))
-            ->orderBy("first_name")->paginate(20);
+        $doctors = Doctor::with("user","department")->orderBy("first_name")->paginate(20);
         return view("doctors.index", compact("doctors"));
     }
     public function create() {
