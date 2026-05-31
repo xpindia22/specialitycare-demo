@@ -1,0 +1,53 @@
+*.log
+.DS_Store
+.env
+.env.backup
+.env.production
+.phpactor.json
+.phpunit.result.cache
+/.codex
+/.cursor/
+/.idea
+/.nova
+/.phpunit.cache
+/.vscode
+/.zed
+/auth.json
+/node_modules
+/public/build
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+/vendor
+_ide_helper.php
+Homestead.json
+Homestead.yaml
+Thumbs.db
+/vendor
+/node_modules
+.env
+/storage/*.key
+/storage/logs/*
+/storage/framework/*
+/bootstrap/cache/*
+
+# Module licensing — NEVER commit these (private key = anyone can sign licenses)
+/storage/license/
+
+# Editor swap files (Vim/Neovim/etc.)
+*.swp
+*.swo
+.*.swp
+.*.swo
+public/storage
+database/sql-backup/latest.sql
+!database/sql-backup/
+!database/sql-backup/latest.sql
+
+# Local-only ad-hoc DB snapshots (created by sync scripts; never commit)
+database/sql-backup/local-pre-*.sql
+database/sql-backup/*-snapshot.sql
+
+# phpBB forum app — deployed separately, never via git
+/public/forum/
