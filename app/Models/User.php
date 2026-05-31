@@ -169,7 +169,11 @@ class User extends Authenticatable
      * destructive actions (delete patient, etc.). Identified by email so
      * adding new admin users doesn't accidentally grant destructive power.
      */
-    public function isOwner(): bool { return strtolower((string) $this->email) === 'xpindia@gmail.com'; }
+    public function isOwner(): bool
+    {
+        $owners = (array) config('access.owner_emails', []);
+        return in_array(strtolower((string) $this->email), $owners, true);
+    }
 
     public function isDoctor():       bool { return $this->hasRole(self::ROLE_DOCTOR); }
     public function isNurse():        bool { return $this->hasRole(self::ROLE_NURSE); }

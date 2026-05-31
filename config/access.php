@@ -21,6 +21,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Owner emails
+    |--------------------------------------------------------------------------
+    | Accounts authorised for irreversible/owner-only actions (destructive
+    | deletes, the login-activity viewer, etc.). Set OWNER_EMAILS in .env per
+    | install so no real owner identity is hardcoded in the codebase. The
+    | hidden owner account(s) above are always treated as owners too.
+    */
+    'owner_emails' => array_values(array_unique(array_filter(array_merge(
+        array_map(fn ($e) => strtolower(trim($e)), explode(',', (string) env('OWNER_EMAILS', ''))),
+        array_map(fn ($e) => strtolower(trim($e)), explode(',', (string) env('OWNER_HIDDEN_EMAILS', '')))
+    )))),
+
+    /*
+    |--------------------------------------------------------------------------
     | Login activity logging
     |--------------------------------------------------------------------------
     | Capture IP + country for every login/failed attempt. The geolocation

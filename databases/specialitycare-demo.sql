@@ -1,7 +1,7 @@
 /*M!999999\- enable the sandbox mode */ 
 -- MariaDB dump 10.19-11.8.6-MariaDB, for debian-linux-gnu (x86_64)
 --
--- Host: localhost    Database: scdemo_schema
+-- Host: localhost    Database: scdemo_rb
 -- ------------------------------------------------------
 -- Server version	11.8.6-MariaDB-2 from Debian
 
@@ -53166,11 +53166,11 @@ COMMIT;
 SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
 
 --
--- Dumping events for database 'scdemo_schema'
+-- Dumping events for database 'scdemo_rb'
 --
 
 --
--- Dumping routines for database 'scdemo_schema'
+-- Dumping routines for database 'scdemo_rb'
 --
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -53182,4 +53182,4 @@ SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*M!100616 SET NOTE_VERBOSITY=@OLD_NOTE_VERBOSITY */;
 
--- Dump completed on 2026-05-31 11:50:45
+-- Dump completed on 2026-05-31 12:42:39

@@ -14,7 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
  * a no-op so the existing role-based access stays intact.
  *
  * Set in .env only on the install you want to restrict:
- *   RESTRICT_ADMIN_TO_OWNER=admin@demo.local
+ *   RESTRICT_ADMIN_TO_OWNER=xpindia@gmail.com
  */
 class RestrictAdminToOwner
 {
