@@ -51,3 +51,4 @@ database/sql-backup/*-snapshot.sql
 
 # phpBB forum app — deployed separately, never via git
 /public/forum/
+.env
