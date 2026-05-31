@@ -118,7 +118,7 @@ past the demo window — you need a purchased commercial license, which includes
 
 **To purchase or request a quote, contact:**
 
-- 📧 Email: **sales@specialitycare.co.in**
+- 📧 Email: **xpindia@gmail.com**
 - 🌐 Website: **https://specialitycare.co.in**
 
 > Do not rely on `MODULES_DEV_OVERRIDE` to bypass expiry — it exists only for
@@ -131,3 +131,5 @@ past the demo window — you need a purchased commercial license, which includes
 - WhatsApp/SMS and outbound email are **disabled** by default (mail is written to
   `storage/logs/laravel.log`). Add your own provider credentials in `.env` to enable.
 - This is a demonstration build, provided as-is without warranty. All rights reserved.
+
+- 
