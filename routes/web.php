@@ -529,6 +529,14 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/users/{user}/reset-password',[UserController::class, 'resetPassword'])->name('users.reset-password');
             Route::post('/users/{user}/roles',         [UserController::class, 'updateRoles'])->name('users.roles');
         });
+        // Login activity log (IP + country) — owner-only. The closure gate
+        // 403s anyone who is not the clinic owner, even other admins.
+        Route::get('/admin/login-activity', [\App\Http\Controllers\Admin\LoginActivityController::class, 'index'])
+            ->name('admin.login-activity')
+            ->middleware(function ($request, $next) {
+                abort_unless(optional(auth()->user())->isOwner(), 403);
+                return $next($request);
+            });
         Route::get('/logs', [ActivityLogController::class, 'index'])->name('logs.index');
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
         Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
