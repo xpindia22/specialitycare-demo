@@ -1,0 +1,18 @@
+{
+    "licensee": "Demo Clinic Pvt. Ltd. (Public Demo)",
+    "issued_at": "2026-05-31T03:36:38+00:00",
+    "expires_at": "2026-12-01T23:59:59+00:00",
+    "modules": [
+        "opd",
+        "ipd",
+        "pharmacy",
+        "lab",
+        "billing",
+        "accounts",
+        "notifications",
+        "hr",
+        "forum",
+        "reports",
+        "patients"
+    ]
+}

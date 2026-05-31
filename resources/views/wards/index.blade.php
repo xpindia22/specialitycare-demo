@@ -1,0 +1,110 @@
+{{-- FILE: resources/views/wards/index.blade.php --}}
+@extends('layouts.app')
+@section('title','Wards & Beds')
+@section('page-title','Wards & Beds')
+@section('content')
+
+<div class="page-header">
+    <div class="page-header-left"><h1>Wards &amp; Beds</h1></div>
+    @if(auth()->user()->isAdmin())
+    <a href="{{ route('wards.create') }}" class="btn btn-primary"><i class="fa-solid fa-plus me-1"></i>Add Ward</a>
+    @endif
+</div>
+
+{{-- Summary bar --}}
+<div class="bed-summary-bar">
+    <div class="bs-item bs-total">    <div class="bs-num">{{ $summary['total'] }}</div>     <div class="bs-lbl">Total Beds</div></div>
+    <div class="bs-item bs-available"><div class="bs-num">{{ $summary['available'] }}</div>  <div class="bs-lbl">Available</div></div>
+    <div class="bs-item bs-occupied"> <div class="bs-num">{{ $summary['occupied'] }}</div>   <div class="bs-lbl">Occupied</div></div>
+    <div class="bs-item bs-reserved"> <div class="bs-num">{{ $summary['reserved'] }}</div>   <div class="bs-lbl">Reserved</div></div>
+    <div class="bs-item bs-maint">    <div class="bs-num">{{ $summary['maintenance'] }}</div><div class="bs-lbl">Maintenance</div></div>
+</div>
+
+@if(session('success'))
+    <div class="alert alert-success">{{ session('success') }}</div>
+@endif
+
+{{-- Ward cards grid --}}
+<div class="ward-cards-grid">
+@forelse($wards as $ward)
+<div class="ward-card {{ !$ward->is_active ? 'ward-inactive' : '' }}">
+    <div class="ward-card-header">
+        <div>
+            <div class="ward-name">{{ $ward->name }}</div>
+            <div class="ward-meta">
+                <span class="ward-type-badge wt-{{ $ward->type }}">{{ $ward->type_label }}</span>
+                @if($ward->floor)<span style="font-size:11px;color:#888;margin-left:6px"><i class="fa-solid fa-stairs"></i> {{ $ward->floor }}</span>@endif
+            </div>
+        </div>
+        <div class="ward-card-actions">
+            <a href="{{ route('wards.show', $ward) }}" class="btn btn-sm btn-primary">Manage</a>
+            @if(auth()->user()->isAdmin())
+            <a href="{{ route('wards.edit', $ward) }}" class="btn btn-sm btn-outline"><i class="fa-solid fa-pen"></i></a>
+            @endif
+        </div>
+    </div>
+
+    {{-- Bed mini-map --}}
+    <div class="bed-mini-map">
+        @forelse($ward->beds->where('is_active',true) as $bed)
+        <div class="bed-mini bed-{{ $bed->status }}" title="{{ $bed->bed_number }} — {{ $bed->status_label }}">
+            {{ $bed->bed_number }}
+        </div>
+        @empty
+        <div style="font-size:12px;color:#aaa;padding:8px">No beds configured</div>
+        @endforelse
+    </div>
+
+    <div class="ward-card-footer">
+        <span class="wf-available"><i class="fa-solid fa-circle" style="color:#16a34a;font-size:9px"></i> {{ $ward->available_beds_count }} available</span>
+        <span class="wf-occupied"><i class="fa-solid fa-circle" style="color:#dc2626;font-size:9px"></i> {{ $ward->occupied_beds_count }} occupied</span>
+        <span class="wf-total" style="margin-left:auto">{{ $ward->total_beds_count }} total</span>
+    </div>
+</div>
+@empty
+<div class="card" style="padding:40px;text-align:center;color:#aaa;grid-column:1/-1">
+    No wards configured yet. <a href="{{ route('wards.create') }}">Add the first ward</a>.
+</div>
+@endforelse
+</div>
+
+@push('styles')
+<style>
+.bed-summary-bar { display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
+.bs-item { background:#fff; border:1px solid #ddd; border-radius:6px; padding:10px 20px; text-align:center; min-width:100px; }
+.bs-num  { font-size:28px; font-weight:800; line-height:1; }
+.bs-lbl  { font-size:10.5px; color:#666; margin-top:2px; }
+.bs-total     .bs-num { color:#333; }
+.bs-available .bs-num { color:#16a34a; }
+.bs-occupied  .bs-num { color:#dc2626; }
+.bs-reserved  .bs-num { color:#d97706; }
+.bs-maint     .bs-num { color:#9ca3af; }
+
+.ward-cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px; }
+
+.ward-card { background:#fff; border:1px solid #ddd; border-radius:8px; overflow:hidden; }
+.ward-inactive { opacity:.6; }
+.ward-card-header { display:flex; align-items:flex-start; justify-content:space-between; padding:14px 16px; border-bottom:1px solid #f0f0f0; }
+.ward-name { font-size:15px; font-weight:700; }
+.ward-meta { margin-top:4px; }
+.ward-card-actions { display:flex; gap:6px; align-items:center; }
+.ward-card-footer { display:flex; gap:12px; align-items:center; padding:8px 16px; background:#fafafa; border-top:1px solid #f0f0f0; font-size:11.5px; color:#555; }
+
+.ward-type-badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; }
+.wt-general      { background:#dbeafe; color:#1e40af; }
+.wt-semi_private { background:#ede9fe; color:#5b21b6; }
+.wt-private      { background:#fef9c3; color:#854d0e; }
+.wt-icu          { background:#fee2e2; color:#7f1d1d; }
+.wt-hdu          { background:#fce7f3; color:#831843; }
+.wt-emergency    { background:#ffedd5; color:#7c2d12; }
+
+/* Bed mini-map */
+.bed-mini-map { display:flex; flex-wrap:wrap; gap:5px; padding:12px 14px; min-height:56px; }
+.bed-mini { width:46px; height:34px; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; cursor:default; border:1px solid transparent; }
+.bed-available   { background:#dcfce7; color:#14532d; border-color:#86efac; }
+.bed-occupied    { background:#fee2e2; color:#7f1d1d; border-color:#fca5a5; }
+.bed-reserved    { background:#fef9c3; color:#713f12; border-color:#fde047; }
+.bed-maintenance { background:#f3f4f6; color:#9ca3af; border-color:#d1d5db; }
+</style>
+@endpush
+@endsection
