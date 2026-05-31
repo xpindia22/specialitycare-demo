@@ -53,11 +53,16 @@ class User extends Authenticatable
      */
     public static function scopeHiddenFilter($q): void
     {
+        // Wrap in a nested group so that when this is used inside a
+        // whereDoesntHave('user', ...) the OR does NOT escape the relation's
+        // correlation constraint (which would hide every row).
         $emails = self::hiddenEmails();
-        $q->where('hidden', true);
-        if (!empty($emails)) {
-            $q->orWhereIn(\Illuminate\Support\Facades\DB::raw('LOWER(email)'), $emails);
-        }
+        $q->where(function ($w) use ($emails) {
+            $w->where('hidden', true);
+            if (!empty($emails)) {
+                $w->orWhereIn(\Illuminate\Support\Facades\DB::raw('LOWER(email)'), $emails);
+            }
+        });
     }
 
     /** True if this account should be hidden from listings. */
