@@ -14,6 +14,9 @@ class LoginActivityController extends Controller
 {
     public function index(Request $request)
     {
+        // Owner-only: 403 any authenticated non-owner (even other admins).
+        abort_unless(optional(auth()->user())->isOwner(), 403);
+
         $q = LoginActivity::query()->orderByDesc('created_at');
 
         if ($s = trim((string) $request->get('q'))) {
