@@ -40707,13 +40707,13 @@ SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
 INSERT INTO `users` VALUES
-(1,'Dr. Sample Admin','admin@demo.local',NULL,'$2y$12$Lv2Nv9amSZcF.flGE7Oh6.PtfHWFZ6t.RFCfBYP44gWh4G3Fm2bn2','admin',1,1,NULL,'2026-04-30 08:22:18','2026-05-03 23:57:25'),
-(2,'Dr. Sample Doctor','doctor@specialitycare.com',NULL,'$2y$12$Lv2Nv9amSZcF.flGE7Oh6.PtfHWFZ6t.RFCfBYP44gWh4G3Fm2bn2','doctor',1,1,NULL,'2026-04-30 08:22:18','2026-04-30 08:22:18'),
-(3,'Dr. Sample Physician','doctor@demo.local',NULL,'$2y$12$Lv2Nv9amSZcF.flGE7Oh6.PtfHWFZ6t.RFCfBYP44gWh4G3Fm2bn2','doctor',1,1,NULL,'2026-04-30 22:04:23','2026-05-09 19:47:47'),
-(4,'Demo Doctor','demo.doctor@specialitycare.co.in',NULL,'$2y$12$Lv2Nv9amSZcF.flGE7Oh6.PtfHWFZ6t.RFCfBYP44gWh4G3Fm2bn2','doctor',1,1,NULL,'2026-05-02 11:36:15','2026-05-02 11:36:15'),
-(100,'Demo Admin','demo.admin@specialitycare.co.in','2026-05-18 07:33:47','$2y$12$Lv2Nv9amSZcF.flGE7Oh6.PtfHWFZ6t.RFCfBYP44gWh4G3Fm2bn2','admin',1,1,NULL,'2026-05-18 00:00:00','2026-05-18 00:00:00'),
-(101,'Demo Staff','demo.staff@specialitycare.co.in','2026-05-18 07:33:47','$2y$12$Lv2Nv9amSZcF.flGE7Oh6.PtfHWFZ6t.RFCfBYP44gWh4G3Fm2bn2','nurse',1,1,NULL,'2026-05-18 00:00:00','2026-05-18 00:00:00'),
-(104,'Demo User','demo@specialitycare.co.in',NULL,'$2y$12$Lv2Nv9amSZcF.flGE7Oh6.PtfHWFZ6t.RFCfBYP44gWh4G3Fm2bn2','admin',1,1,NULL,'2026-05-29 00:41:28','2026-05-29 00:41:28');
+(1,'Dr. Sample Admin','admin@demo.local',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','admin',1,1,NULL,'2026-04-30 08:22:18','2026-05-03 23:57:25'),
+(2,'Dr. Sample Doctor','doctor@specialitycare.com',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','doctor',1,1,NULL,'2026-04-30 08:22:18','2026-04-30 08:22:18'),
+(3,'Dr. Sample Physician','doctor@demo.local',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','doctor',1,1,NULL,'2026-04-30 22:04:23','2026-05-09 19:47:47'),
+(4,'Demo Doctor','demo.doctor@specialitycare.co.in',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','doctor',1,1,NULL,'2026-05-02 11:36:15','2026-05-02 11:36:15'),
+(100,'Demo Admin','demo.admin@specialitycare.co.in','2026-05-18 07:33:47','$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','admin',1,1,NULL,'2026-05-18 00:00:00','2026-05-18 00:00:00'),
+(101,'Demo Staff','demo.staff@specialitycare.co.in','2026-05-18 07:33:47','$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','nurse',1,1,NULL,'2026-05-18 00:00:00','2026-05-18 00:00:00'),
+(104,'Demo User','demo@specialitycare.co.in',NULL,'$2y$12$jhZ79jiDSCy8EPlJpF8Nx.ufNyWYoKIcmn4k42Wjf8.dgjGqzLhcu','admin',1,1,NULL,'2026-05-29 00:41:28','2026-05-29 00:41:28');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 COMMIT;
