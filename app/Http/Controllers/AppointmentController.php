@@ -197,6 +197,8 @@ class AppointmentController extends Controller
         $range = $request->get('range', 'today');   // today | upcoming | all
         $day   = $request->get('day');               // today|tomorrow|dayafter|later|past (legend filter)
         $query = Appointment::with('patient', 'doctor');
+        // Appointments cancelled because their visit was deleted are listed only under status = Cancelled.
+        if ($request->status !== 'Cancelled') $query->withoutDeletedVisits();
         if ($request->date) {
             $query->whereDate('appointment_date', $request->date);
         } elseif ($request->search) {
@@ -241,10 +243,12 @@ class AppointmentController extends Controller
 
     public function create(Request $request)
     {
-        $doctors = Doctor::where('is_active', true)->get();
+        $doctors = Doctor::where('is_active', true)->with('departments', 'department')->orderBy('first_name')->get();
+        $departments = \App\Models\Department::where('is_active', true)->ordered()->get()
+            ->filter(fn ($d) => $doctors->contains(fn ($doc) => in_array($d->id, $doc->departmentIds())))->values();
         $patient = $request->patient_id ? Patient::find($request->patient_id) : null;
         $patients = $patient ? collect() : Patient::orderBy('first_name')->get(['id', 'first_name', 'last_name', 'jhc_id', 'phone']);
-        return view('appointments.create', compact('doctors', 'patient', 'patients'));
+        return view('appointments.create', compact('doctors', 'departments', 'patient', 'patients'));
     }
 
     public function store(Request $request)
@@ -252,6 +256,7 @@ class AppointmentController extends Controller
         $validated = $request->validate([
             'patient_id'       => 'required|exists:patients,id',
             'doctor_id'        => 'required|exists:doctors,id',
+            'department_id'    => 'nullable|exists:departments,id',
             'appointment_date' => 'required|date|after_or_equal:today',
             'appointment_time' => 'nullable',
             'type'             => 'required|in:New,New Consultation,Follow-up,Review,Emergency,Teleconsult',
@@ -287,6 +292,13 @@ class AppointmentController extends Controller
         }
 
         $appointment = Appointment::create($validated);
+
+        // Booked for an OPD referral: link it so the referral shows as booked, then seen
+        if ($request->filled('referral_id')) {
+            \App\Models\OpdReferral::whereKey($request->integer('referral_id'))
+                ->where('patient_id', $appointment->patient_id)->whereIn('status', ['pending', 'booked'])
+                ->update(['appointment_id' => $appointment->id, 'status' => 'booked']);
+        }
 
         // Teleconsult: fire the meeting-link notification (rides on the
         // appointment_confirm preference). Free-form WA until the
@@ -342,7 +354,7 @@ class AppointmentController extends Controller
     {
         abort_unless($appointment->patient && $appointment->patient->email, 422, 'This patient has no email on file.');
         $clinic = setting('clinic_name', config('app.name', 'Speciality Care'));
-        $cc = setting('clinic_email') ?: 'admin@demo.local';
+        $cc = setting('clinic_email') ?: 'xpindia@gmail.com';
         try {
             \Illuminate\Support\Facades\Mail::raw($this->reminderBody($appointment), function ($m) use ($appointment, $cc, $clinic) {
                 $m->to($appointment->patient->email)->subject("Appointment reminder — {$clinic} ({$appointment->appointment_date->format('d M Y')})");
@@ -405,11 +417,10 @@ class AppointmentController extends Controller
             ->exists();
 
         if (!$alreadyHasToken) {
-            $token = OpdToken::create([
-                'token_no'   => OpdToken::nextTokenNo(),
-                'token_date' => today(),
-                'patient_id' => $appointment->patient_id,
-                'doctor_id'  => $appointment->doctor_id,
+            $token = OpdToken::issue([
+                'patient_id'    => $appointment->patient_id,
+                'doctor_id'     => $appointment->doctor_id,
+                'department_id' => $appointment->department_id,
                 'status'     => 'waiting',
                 'priority'   => 'normal',
                 'purpose'    => $appointment->type . ($appointment->chief_complaint ? ' — ' . $appointment->chief_complaint : ''),
@@ -521,41 +532,37 @@ class AppointmentController extends Controller
             ->with('success', 'Appointment updated.');
     }
 
-    public function getSlots(Request $request)
+    public function getSlots(Request $request, \App\Services\DoctorAvailability $avail)
     {
         $request->validate(['doctor_id' => 'required', 'date' => 'required|date']);
-        $doctor = Doctor::findOrFail($request->doctor_id);
-        $date = Carbon::parse($request->date);
+        $doctor = Doctor::with('schedules')->findOrFail($request->doctor_id);
+        $date   = Carbon::parse($request->date);
+        $leave  = $avail->leaveOn($doctor, $date);
+        $deptId = $request->integer('department_id') ?: null;
+        if ($deptId && !in_array($deptId, $doctor->departmentIds())) $deptId = null;
 
-        $startTime = Carbon::parse($doctor->start_time ?? '09:00');
-        $endTime = Carbon::parse($doctor->end_time ?? '17:00');
-        $slotDuration = $doctor->slot_duration ?? 15;
-
-        $booked = Appointment::where('doctor_id', $request->doctor_id)
-            ->whereDate('appointment_date', $request->date)
-            ->whereNotIn('status', ['Cancelled', 'No-Show'])
-            ->pluck('appointment_time')
-            ->toArray();
-
-        $slots = [];
-        $current = $startTime->copy();
-        while ($current < $endTime) {
-            $timeStr = $current->format('H:i:s');
-            $slots[] = [
-                'time'      => $current->format('H:i'),
-                'value'     => $timeStr,
-                'available' => !in_array($timeStr, $booked),
-            ];
-            $current->addMinutes($slotDuration);
-        }
-
-        return response()->json(['slots' => $slots]);
+        return response()->json([
+            'slots'    => $avail->slots($doctor, $date, $deptId),
+            'on_leave' => $leave ? ($leave->reason ?: 'On leave') : null,
+        ]);
     }
 
     public function startEncounter(Appointment $appointment)
     {
         if ($appointment->encounter) {
             return redirect()->route('encounters.show', $appointment->encounter);
+        }
+
+        // A visit happening today on an appointment booked for a later date (e.g. a
+        // "Book follow-up" form saved with the pre-filled follow-up date) would
+        // otherwise drop out of today's appointment list. Move it to today.
+        $movedFrom = null;
+        if ($appointment->appointment_date && $appointment->appointment_date->isAfter(today())) {
+            $movedFrom = $appointment->appointment_date->format('d M Y');
+            $appointment->update([
+                'appointment_date'  => today()->toDateString(),
+                'reschedule_reason' => "Visit started on " . today()->format('d M Y') . " (was booked for {$movedFrom})",
+            ]);
         }
 
         $appointment->update(['status' => 'In-Progress']);
@@ -573,7 +580,10 @@ class AppointmentController extends Controller
             'created_by'      => auth()->id(),
         ]);
 
-        return redirect()->route('encounters.show', $encounter);
+        $redirect = redirect()->route('encounters.show', $encounter);
+        return $movedFrom
+            ? $redirect->with('success', "This appointment was booked for {$movedFrom}; it has been moved to today because the visit is happening now.")
+            : $redirect;
     }
 
     /**

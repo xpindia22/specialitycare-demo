@@ -29,6 +29,7 @@ class SendBirthdayWhatsApp extends Command
         $limit  = $this->option('limit') !== null ? (int) $this->option('limit') : null;
         $dryRun = (bool) $this->option('dry-run');
         $clinic = setting('clinic_name', config('app.name', 'Speciality Care'));
+        $clinicSig = clinic_signature();
         $today  = now();
         $year   = $today->year;
 
@@ -50,7 +51,7 @@ class SendBirthdayWhatsApp extends Command
             if ($already) { $skipped++; continue; }
 
             $name = $p->full_name ?: 'there';
-            $body = "Hi {$name},\n\nWishing you a very happy birthday! May the year ahead bring good health, joy and many smiles.\n\nWarm wishes from the team at {$clinic}.\n[ref:{$key}]";
+            $body = "Hi {$name},\n\nWishing you a very happy birthday! May the year ahead bring good health, joy and many smiles.\n\nWarm wishes from the team at {$clinicSig}.\n[ref:{$key}]";
 
             if ($dryRun) {
                 $sent++;
@@ -59,7 +60,7 @@ class SendBirthdayWhatsApp extends Command
             }
 
             // Template birthday_greeting: {{1}} name, {{2}} clinic.
-            $r = $wa->sendTemplateToPatient($p, 'birthday_greeting', [$name, $clinic], $body, 'birthday_greeting');
+            $r = $wa->sendTemplateToPatient($p, 'birthday_greeting', [$name, $clinicSig], $body, 'birthday_greeting');
             if ($r['ok'] ?? false) { $sent++; }
             else { $skipped++; }
         }

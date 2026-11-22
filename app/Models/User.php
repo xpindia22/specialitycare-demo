@@ -27,7 +27,7 @@ class User extends Authenticatable
         self::ROLE_PHARMACIST   => 'Pharmacist',
     ];
 
-    protected $fillable = ['name', 'email', 'password', 'role', 'is_active', 'has_system_access', 'hidden'];
+    protected $fillable = ['name', 'email', 'password', 'role', 'is_active', 'has_system_access', 'hidden', 'can_delete_visits'];
     protected $hidden   = ['password', 'remember_token'];
 
     protected function casts(): array {
@@ -178,6 +178,12 @@ class User extends Authenticatable
     {
         $owners = (array) config('access.owner_emails', []);
         return in_array(strtolower((string) $this->email), $owners, true);
+    }
+
+    /** May delete (hide) a visit: the owner, or staff the owner allowed under Users → Manage User. */
+    public function canDeleteVisits(): bool
+    {
+        return $this->isOwner() || (bool) $this->can_delete_visits;
     }
 
     public function isDoctor():       bool { return $this->hasRole(self::ROLE_DOCTOR); }

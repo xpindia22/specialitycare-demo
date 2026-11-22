@@ -41,6 +41,22 @@ class BackupController extends Controller
         return response()->download($path, $name, ['Content-Type' => 'application/gzip']);
     }
 
+    /** Delete the selected backup files. */
+    public function deleteBackups(Request $request)
+    {
+        $data = $request->validate([
+            'names'   => 'required|array|min:1',
+            'names.*' => ['string', 'regex:/^db-[\w\-\.]+\.sql\.gz$/'],
+        ], ['names.required' => 'Select at least one backup to delete.']);
+
+        $deleted = 0;
+        foreach (array_unique($data['names']) as $name) {
+            $path = storage_path('app/backups/' . basename($name));
+            if (is_file($path) && @unlink($path)) $deleted++;
+        }
+        return back()->with($deleted ? 'success' : 'error', $deleted ? "Deleted {$deleted} backup(s)." : 'No backups were deleted.');
+    }
+
     /**
      * Stream a CSV export of one of the supported tables.
      * Whitelisted to avoid arbitrary table dumps.

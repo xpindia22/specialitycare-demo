@@ -3,6 +3,8 @@
 @section('page-title','Operation Detail')
 @section('content')
 
+@include('diagnostics._toolbar')
+
 <div class="page-header">
   <div class="page-header-left">
     <h1 class="mono">{{ $operation->operation_no }}</h1>

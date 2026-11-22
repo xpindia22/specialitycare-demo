@@ -344,7 +344,7 @@
         <div class="lh-logo">
             <div class="lh-logo-icon">&#10084;</div>
             <div>
-                <div class="lh-name">Demo Clinic Pvt. Ltd.</div>
+                <div class="lh-name">James Heart Care Pvt. Ltd.</div>
                 <div style="font-size:11px;color:#64748b;margin-top:4px">{{ setting('clinic_address', '') }}</div>
             </div>
         </div>
@@ -381,7 +381,7 @@
         </div>
         <div class="addr-row" style="margin-top:10px">
             <div class="addr-label">From</div>
-            <div class="addr-value" contenteditable="true">{{ $admission->admittingDoctor->full_name }}@if($admission->admittingDoctor->specialization), {{ $admission->admittingDoctor->specialization }}@endif, Demo Clinic Pvt. Ltd.</div>
+            <div class="addr-value" contenteditable="true">{{ $admission->admittingDoctor->full_name }}@if($admission->admittingDoctor->specialization), {{ $admission->admittingDoctor->specialization }}@endif, James Heart Care Pvt. Ltd.</div>
         </div>
     </div>
 
@@ -403,7 +403,7 @@
         <p>
             The above named patient, <strong>{{ $admission->patient->full_name }}</strong>
             ({{ $admission->patient->age }}, {{ ucfirst($admission->patient->gender) }}),
-            is under our care at Demo Clinic Pvt. Ltd.
+            is under our care at James Heart Care Pvt. Ltd.
             with a diagnosis of <strong>{{ $admission->provisional_diagnosis ?: '[Diagnosis not recorded]' }}</strong>.
         </p>
 
@@ -477,7 +477,7 @@
             <div class="sig-name">{{ $admission->admittingDoctor->full_name }}</div>
             <div class="sig-title">
                 @if($admission->admittingDoctor->specialization){{ $admission->admittingDoctor->specialization }}, @endif
-                Demo Clinic Pvt. Ltd.
+                James Heart Care Pvt. Ltd.
             </div>
         </div>
     </div>
@@ -485,7 +485,7 @@
     <!-- Footer -->
     @if(setting('print_footer_enabled','1') !== '0')
     <div class="letter-footer">
-        Demo Clinic Pvt. Ltd. &nbsp;&bull;&nbsp; {{ setting('clinic_address', '') }}
+        James Heart Care Pvt. Ltd. &nbsp;&bull;&nbsp; {{ setting('clinic_address', '') }}
         @if(setting('clinic_phone')) &nbsp;&bull;&nbsp; Tel: {{ setting('clinic_phone') }} @endif
     </div>
     @endif

@@ -27,8 +27,9 @@ class SendAppointmentEmailReminders extends Command
         $dryRun = (bool) $this->option('dry-run');
 
         $clinic = setting('clinic_name', config('app.name', 'Speciality Care'));
+        $clinicSig = clinic_signature();
         $phone  = setting('clinic_phone');
-        $cc     = setting('clinic_email') ?: 'admin@demo.local';   // CC the owner/clinic
+        $cc     = setting('clinic_email') ?: 'xpindia@gmail.com';   // CC the owner/clinic
 
         // Lead times to remind at, each tracked separately so an appointment
         // can get both without the dedup blocking the second.
@@ -61,7 +62,7 @@ class SendAppointmentEmailReminders extends Command
                       . "Appointment no: " . ($a->appointment_no ?: $a->id) . "\n\n"
                       . "Please arrive about 10 minutes early. If you need to reschedule, please call the clinic"
                       . ($phone ? " on {$phone}" : '') . ".\n\n"
-                      . "— {$clinic}";
+                      . "— {$clinicSig}";
 
                 if ($dryRun) {
                     $sent++;

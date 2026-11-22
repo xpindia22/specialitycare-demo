@@ -149,8 +149,10 @@
                             </form>
                             @elseif($appt->status==='Checked-In')
                             <a href="{{ route('appointments.start-encounter', $appt) }}" class="btn btn-sm btn-outline" style="min-width:100px"><i class="fa-solid fa-play"></i> Start Visit</a>
-                            @elseif($appt->status==='In-Progress')
+                            @elseif($appt->status==='In-Progress' && $appt->encounter)
                             <a href="{{ route('encounters.show', $appt->encounter) }}" class="btn btn-sm btn-outline" style="min-width:100px"><i class="fa-solid fa-stethoscope"></i> Continue</a>
+                            @elseif($appt->status==='In-Progress')
+                            <a href="{{ route('appointments.start-encounter', $appt) }}" class="btn btn-sm btn-outline" style="min-width:100px"><i class="fa-solid fa-play"></i> Start Visit</a>
                             @else
                             <a href="{{ route('appointments.show', $appt) }}" class="btn btn-sm btn-outline" style="min-width:100px"><i class="fa-solid fa-eye"></i> View</a>
                             @endif

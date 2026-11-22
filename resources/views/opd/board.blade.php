@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OPD Queue Board — {{ setting('clinic_name','Demo Clinic') }}</title>
+    <title>OPD Queue Board — {{ setting('clinic_name','James Heart Care') }}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
     * { box-sizing:border-box; margin:0; padding:0; }
@@ -75,7 +75,7 @@
 
 <div class="board-header">
     <div>
-        <div class="board-clinic"><i class="fa-solid fa-heart-pulse" style="color:#ef4444;margin-right:8px"></i>{{ setting('clinic_name','Demo Clinic Pvt. Ltd.') }}</div>
+        <div class="board-clinic"><i class="fa-solid fa-heart-pulse" style="color:#ef4444;margin-right:8px"></i>{{ setting('clinic_name','James Heart Care Pvt. Ltd.') }}</div>
         <div class="board-date">OPD Queue — {{ today()->format('l, d F Y') }}</div>
     </div>
     <div class="board-clock" id="clock"></div>
@@ -90,6 +90,12 @@
 
 <div class="filter-bar">
     <label>Filter:</label>
+    <select id="deptFilter" onchange="loadQueue()">
+        <option value="">All Specialities</option>
+        @foreach($departments as $dep)
+            <option value="{{ $dep->id }}" {{ $deptId == $dep->id ? 'selected':'' }}>{{ $dep->name }}</option>
+        @endforeach
+    </select>
     <select id="doctorFilter" onchange="loadQueue()">
         <option value="">All Doctors</option>
         @foreach($doctors as $d)
@@ -108,7 +114,7 @@
                 <div class="q-token">{{ $t->display }}</div>
                 <div>
                     <div class="q-name">{{ $t->patient->first_name }} {{ $t->patient->last_name }}</div>
-                    <div class="q-meta">{{ $t->doctor ? 'Dr. '.$t->doctor->first_name.' '.$t->doctor->last_name : 'Any Doctor' }}{{ $t->purpose ? ' · '.$t->purpose : '' }}</div>
+                    <div class="q-meta">{{ $t->doctor ? 'Dr. '.$t->doctor->first_name.' '.$t->doctor->last_name : 'Any Doctor' }}@if($t->department) · <span style="color:{{ $t->department->color ?: 'inherit' }}"><i class="fa-solid {{ $t->department->icon ?: 'fa-hospital' }}"></i> {{ $t->department->name }}</span>@endif{{ $t->purpose ? ' · '.$t->purpose : '' }}</div>
                 </div>
                 <div class="q-status">
                     @if($t->status==='called')
@@ -152,7 +158,9 @@ updateClock(); setInterval(updateClock, 1000);
 // Live queue polling
 function loadQueue() {
     const doctorId = document.getElementById('doctorFilter').value;
-    const url = `/specialitycare/opd/queue-data${doctorId ? '?doctor_id='+doctorId : ''}`;
+    const deptId   = document.getElementById('deptFilter').value;
+    const qs  = new URLSearchParams(Object.entries({doctor_id: doctorId, department_id: deptId}).filter(([, v]) => v)).toString();
+    const url = `/specialitycare/opd/queue-data${qs ? '?' + qs : ''}`;
     fetch(url)
         .then(r => r.json())
         .then(data => {
@@ -173,7 +181,7 @@ function loadQueue() {
                         <div class="q-token">${t.display}</div>
                         <div>
                             <div class="q-name">${t.patient}</div>
-                            <div class="q-meta">${t.doctor}${t.purpose?' · '+t.purpose:''}</div>
+                            <div class="q-meta">${t.doctor}${t.department?' · '+t.department:''}${t.purpose?' · '+t.purpose:''}</div>
                         </div>
                         <div class="q-status">
                             ${t.status==='called'

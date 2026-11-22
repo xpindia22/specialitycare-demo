@@ -3,6 +3,8 @@
 @section('title', 'Medicines')
 
 @section('content')
+
+@include('pharmacy._toolbar')
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 class="mb-1">Medicines</h4>

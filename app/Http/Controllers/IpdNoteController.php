@@ -54,6 +54,8 @@ class IpdNoteController extends Controller
             'weight'           => 'nullable|numeric|between:1,300',
             'blood_glucose'    => 'nullable|numeric|between:20,800',
             'urine_output'     => 'nullable|string|max:100',
+            'avpu'             => ['nullable', \Illuminate\Validation\Rule::in(array_keys(IpdVitals::AVPU))],
+            'o2_device'        => ['nullable', \Illuminate\Validation\Rule::in(array_keys(IpdVitals::O2_DEVICES))],
             'notes'            => 'nullable|string|max:500',
         ]);
         $data['admission_id'] = $admission->id;
@@ -82,6 +84,8 @@ class IpdNoteController extends Controller
             'weight'           => 'nullable|numeric|between:1,300',
             'blood_glucose'    => 'nullable|numeric|between:20,800',
             'urine_output'     => 'nullable|string|max:100',
+            'avpu'             => ['nullable', \Illuminate\Validation\Rule::in(array_keys(IpdVitals::AVPU))],
+            'o2_device'        => ['nullable', \Illuminate\Validation\Rule::in(array_keys(IpdVitals::O2_DEVICES))],
             'notes'            => 'nullable|string|max:500',
         ]);
 

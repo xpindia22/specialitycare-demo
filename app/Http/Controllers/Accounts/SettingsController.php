@@ -23,12 +23,21 @@ class SettingsController extends Controller
             'clinic_state_name'  => ['nullable', 'string', 'max:100'],
             'clinic_legal_name'  => ['nullable', 'string', 'max:200'],
             'fy_start_month'     => ['required', 'integer', 'min:1', 'max:12'],
+            'accounts_books_opening_date'  => ['nullable', 'date'],
             'accounts_auto_post_bills'     => ['nullable', 'boolean'],
             'accounts_auto_post_purchases' => ['nullable', 'boolean'],
+            'accounts_auto_post_dispense'  => ['nullable', 'boolean'],
+            'accounts_pharmacy_sale_markup_pct' => ['nullable', 'numeric', 'min:0', 'max:1000'],
         ]);
+        // Normalise the cutover date to Y-m-d (or '' to clear it).
+        $data['accounts_books_opening_date'] = $data['accounts_books_opening_date']
+            ? \Illuminate\Support\Carbon::parse($data['accounts_books_opening_date'])->toDateString()
+            : '';
         // Booleans default to 0 when checkbox is unchecked (not posted)
         $data['accounts_auto_post_bills']     = (string) (int) ($data['accounts_auto_post_bills']     ?? 0);
         $data['accounts_auto_post_purchases'] = (string) (int) ($data['accounts_auto_post_purchases'] ?? 0);
+        $data['accounts_auto_post_dispense']  = (string) (int) ($data['accounts_auto_post_dispense']  ?? 0);
+        $data['accounts_pharmacy_sale_markup_pct'] = (string) (float) ($data['accounts_pharmacy_sale_markup_pct'] ?? 0);
 
         foreach ($data as $k => $v) {
             DB::table('settings')->updateOrInsert(

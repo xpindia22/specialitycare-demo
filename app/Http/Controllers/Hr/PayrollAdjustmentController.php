@@ -57,7 +57,7 @@ class PayrollAdjustmentController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'person_key' => 'required|regex:/^(staff|doctor)_\d+$/',
+            'person_key' => ['required', 'regex:/^(staff|doctor)_\d+$/'],
             'date'       => 'required|date',
             'type'       => ['required', Rule::in(array_keys(PayrollAdjustment::TYPES))],
             'amount'     => 'required|numeric|min:0.01|max:1000000',

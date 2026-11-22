@@ -3,6 +3,8 @@
 @section('page-title', $payee->exists ? 'Edit Payee' : 'New Payee')
 @section('content')
 
+@include('accounts._toolbar')
+
 <div class="page-header">
     <div class="page-header-left">
         <a href="{{ route('accounts.payees.index') }}" class="text-small"><i class="fa-solid fa-arrow-left"></i> Payees</a>
@@ -19,7 +21,7 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div>
             <label>Name *</label>
-            <input name="name" value="{{ old('name', $payee->name) }}" class="form-control" required placeholder="e.g., Sample Physician">
+            <input name="name" value="{{ old('name', $payee->name) }}" class="form-control" required placeholder="e.g., Anushika">
         </div>
         <div>
             <label>Role</label>

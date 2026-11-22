@@ -80,10 +80,11 @@
 <div id="tab-panels" class="lab-tab" style="display:none">
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
         @foreach($panels as $panel)
-        <label style="display:flex;gap:12px;padding:14px;background:var(--sc-bg);border-radius:8px;border:1.5px solid var(--sc-border);cursor:pointer;transition:all .15s" class="test-label panel-label" data-id="{{ $panel->id }}" data-name="{{ $panel->name }}" data-price="{{ $panel->price }}" data-type="panel" data-search="{{ strtolower($panel->name.' '.$panel->short_code.' '.$panel->description.' '.$panel->tests->pluck('name')->join(' ')) }}">
+        @php $suits = ($patient ?? null) && $panel->isTargeted() && $panel->matchesPatient($patient); @endphp
+        <label style="display:flex;gap:12px;padding:14px;background:{{ $suits ? '#f0fdf4' : 'var(--sc-bg)' }};border-radius:8px;border:1.5px solid {{ $suits ? '#16a34a' : 'var(--sc-border)' }};cursor:pointer;transition:all .15s" class="test-label panel-label" data-id="{{ $panel->id }}" data-name="{{ $panel->name }}" data-price="{{ $panel->price }}" data-type="panel" data-search="{{ strtolower($panel->name.' '.$panel->short_code.' '.$panel->description.' '.$panel->tests->pluck('name')->join(' ')) }}">
             <input type="checkbox" name="panels[]" value="{{ $panel->id }}" style="display:none" onchange="updateSelected(this.closest('.test-label'))">
             <div style="flex:1">
-                <div style="font-size:14px;font-weight:700">{{ $panel->name }}</div>
+                <div style="font-size:14px;font-weight:700">{{ $panel->name }}@if($panel->targetBadge())<span style="font-size:10px;font-weight:700;background:#eef2ff;color:#4338ca;border-radius:6px;padding:1px 6px;margin-left:4px;white-space:nowrap">{{ $panel->targetBadge() }}</span>@endif @if($suits)<span style="font-size:10px;font-weight:700;color:#16a34a">✓ suits this patient</span>@endif</div>
                 <div style="font-size:11.5px;color:var(--sc-muted);margin-top:3px">{{ $panel->description }}</div>
                 <div style="font-size:11px;color:var(--sc-muted);margin-top:6px">{{ $panel->tests->pluck('name')->join(' · ') }}</div>
             </div>

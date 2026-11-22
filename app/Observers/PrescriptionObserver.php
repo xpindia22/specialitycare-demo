@@ -5,15 +5,14 @@ namespace App\Observers;
 use App\Models\Prescription;
 use App\Services\AdminNotifier;
 use App\Services\NotificationPreferenceService;
-use App\Services\PatientNotifier;
 
 class PrescriptionObserver
 {
     public function created(Prescription $rx): void
     {
-        // Always offer to send the patient-facing copy (PatientNotifier
-        // checks the prescription_to_patient preferences internally).
-        app(PatientNotifier::class)->sendPrescription($rx);
+        // Patient-facing auto-send REMOVED 2026-08-26: no more auto WhatsApp/
+        // email to the patient on prescription creation -- staff must click
+        // Send/Email/WhatsApp on the prescription to send it.
 
         if (!app(NotificationPreferenceService::class)->shouldSend('prescription_created', 'admin', 'email')) return;
         $rx->loadMissing(['patient', 'doctor', 'items.medicine']);

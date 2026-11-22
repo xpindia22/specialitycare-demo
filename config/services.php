@@ -61,6 +61,10 @@ return [
     // change needed. Default stays 'twilio' so the existing sandbox keeps
     // working until Meta is fully set up.
     'whatsapp' => [
+        // Env kill switch (default ON). Set WHATSAPP_ENABLED=false on dev/home
+        // boxes to stop ALL outbound WhatsApp without touching the DB settings
+        // (which sync down from nvme). Env is never synced, so it's per-host.
+        'enabled'         => filter_var(env('WHATSAPP_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
         'provider'        => env('WHATSAPP_PROVIDER', 'twilio'),    // 'twilio' | 'meta' | 'gupshup'
         'default_country' => env('WHATSAPP_DEFAULT_COUNTRY', env('TWILIO_DEFAULT_COUNTRY', '91')),
         'daily_limit'     => (int) env('WHATSAPP_DAILY_LIMIT', env('TWILIO_DAILY_LIMIT', 500)),
@@ -107,6 +111,16 @@ return [
             'api_key'  => env('GUPSHUP_API_KEY'),
             'source'   => env('GUPSHUP_SOURCE'),
             'app_name' => env('GUPSHUP_APP_NAME'),
+            // Inbound vitals webhook: patients WhatsApp their readings to the BSP
+            // number; Gupshup POSTs them to /webhooks/whatsapp/inbound?token=...
+            // 'inbound_token' guards that endpoint (set it in the Gupshup callback
+            // URL). 'inbound_vitals' is the on/off switch for the whole feature.
+            'inbound_token'  => env('GUPSHUP_INBOUND_TOKEN'),
+            'inbound_vitals' => env('GUPSHUP_INBOUND_VITALS', false),
+            // Inbound lab-report PDFs: allowlisted staff forward a report to the BSP
+            // number; the PDF is parsed and queued for review. On/off switch here;
+            // allowed sender numbers + webhook secret live in config/labreports.php.
+            'inbound_lab_reports' => env('GUPSHUP_INBOUND_LAB_REPORTS', false),
             // Internal kind => Gupshup *template ID* (a UUID from the dashboard,
             // NOT the template name). Required for business-initiated sends.
             'templates' => [
@@ -130,6 +144,18 @@ return [
                 'owner_appointment_created' => env('GUPSHUP_TPL_OWNER_APPT_CREATED'),
                 // Teleconsult link (PENDING approval 2026-05-26):
                 'teleconsult_link'     => env('GUPSHUP_TPL_TELECONSULT_LINK'),
+                // Report-ready templates added 2026-08-26, APPROVED 2026-08-27:
+                'echo_report_ready'    => env('GUPSHUP_TPL_ECHO_REPORT'),
+                // Same, with the report PDF as a DOCUMENT header (attachment in the chat).
+                // Used by the echo WhatsApp button when set; else echo_report_ready (text only).
+                'echo_report_pdf'      => env('GUPSHUP_TPL_ECHO_REPORT_PDF'),
+                'lab_report_ready'     => env('GUPSHUP_TPL_LAB_REPORT'),
+                'prescription_ready'   => env('GUPSHUP_TPL_PRESCRIPTION'),
+                // Clinic relocation notice added 2026-08-30 (PENDING Gupshup/Meta approval):
+                'address_change'       => env('GUPSHUP_TPL_ADDRESS_CHANGE'),
+                // Hindi/Tamil relocation notices added 2026-09-01 (PENDING Gupshup/Meta approval):
+                'address_change_hi'    => env('GUPSHUP_TPL_ADDRESS_CHANGE_HI'),
+                'address_change_ta'    => env('GUPSHUP_TPL_ADDRESS_CHANGE_TA'),
             ],
         ],
     ],

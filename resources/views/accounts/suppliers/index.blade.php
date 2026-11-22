@@ -3,15 +3,14 @@
 @section('page-title','Suppliers')
 @section('content')
 
+@include('accounts._toolbar', ['extra' => [
+    ['url' => route('accounts.suppliers.create'), 'icon' => 'fa-plus', 'label' => 'New Supplier', 'bg' => '#0d9488'],
+]])
+
 <div class="page-header">
     <div class="page-header-left">
-        <a href="{{ route('accounts.index') }}" class="text-small"><i class="fa-solid fa-arrow-left"></i> Accounts</a>
         <h1><i class="fa-solid fa-truck-fast"></i> Suppliers</h1>
         <div class="text-small text-muted">People you buy medicines / supplies from. Hidden complexity (group, party type) is handled for you.</div>
-    </div>
-    <div style="display:flex;gap:8px">
-        <a href="{{ route('accounts.expenses.pay-supplier') }}" class="btn btn-outline"><i class="fa-solid fa-money-bill"></i> Pay Supplier</a>
-        <a href="{{ route('accounts.suppliers.create') }}" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Add Supplier</a>
     </div>
 </div>
 

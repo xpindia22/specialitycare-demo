@@ -8,6 +8,7 @@
     <h1>New Radiology Order</h1>
     <div class="breadcrumb"><a href="{{ route('radiology.index') }}">Radiology</a> &rsaquo; New Order</div>
   </div>
+  @include('diagnostics._toolbar', ['inline'=>true])
 </div>
 
 <form method="POST" action="{{ route('radiology.store') }}">

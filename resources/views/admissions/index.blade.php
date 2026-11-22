@@ -9,11 +9,7 @@
         <h1>IPD Admissions</h1>
         <div class="breadcrumb">Inpatient Department &mdash; Admission Register</div>
     </div>
-    @if(auth()->user()->hasRole(['admin','doctor','nurse','receptionist']))
-    <a href="{{ route('admissions.create') }}" class="btn btn-primary">
-        <i class="fa-solid fa-bed-pulse"></i> New Admission
-    </a>
-    @endif
+    @include('ipd._toolbar', ['inline'=>true])
 </div>
 
 {{-- Stats --}}
@@ -44,14 +40,27 @@
 {{-- Filters --}}
 <div class="card mb-3">
     <div class="card-body" style="padding:14px 20px">
-        <form method="GET" class="flex gap-3 items-center" style="flex-wrap:wrap">
-            <div class="topbar-search" style="width:300px">
+        <form method="GET" class="flex gap-3 items-center" style="flex-wrap:wrap;gap:8px">
+            <input type="hidden" name="status" value="{{ $status }}">
+            <div class="topbar-search" style="width:280px">
                 <i class="fa-solid fa-magnifying-glass"></i>
                 <input type="text" name="q" value="{{ $q }}" placeholder="Search IPD no, patient name, JHC ID…">
             </div>
-            <div style="display:flex;gap:6px">
+            <label class="text-small text-muted" style="align-self:center">From</label>
+            <input type="date" name="from" value="{{ $from }}" class="form-control" style="width:150px">
+            <label class="text-small text-muted" style="align-self:center">To</label>
+            <input type="date" name="to" value="{{ $to }}" class="form-control" style="width:150px">
+            <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+            <a href="{{ route('admissions.index', ['status'=>$status,'q'=>$q,'from'=>today()->toDateString(),'to'=>today()->toDateString()]) }}" class="btn btn-outline btn-sm"><i class="fa-solid fa-calendar-day"></i> Today</a>
+            <a href="{{ route('admissions.index', ['status'=>$status,'q'=>$q,'from'=>today()->subDay()->toDateString(),'to'=>today()->subDay()->toDateString()]) }}" class="btn btn-outline btn-sm"><i class="fa-solid fa-calendar-minus"></i> Yesterday</a>
+            <a href="{{ route('admissions.index', ['status'=>$status,'q'=>$q,'from'=>today()->subDays(6)->toDateString(),'to'=>today()->toDateString()]) }}" class="btn btn-outline btn-sm"><i class="fa-solid fa-calendar-week"></i> Last Week</a>
+            <a href="{{ route('admissions.index', ['status'=>$status,'q'=>$q,'from'=>today()->subDays(29)->toDateString(),'to'=>today()->toDateString()]) }}" class="btn btn-outline btn-sm"><i class="fa-solid fa-calendar-days"></i> Last Month</a>
+            @if($from || $to)
+            <a href="{{ route('admissions.index', ['status'=>$status,'q'=>$q]) }}" class="btn btn-outline btn-sm" title="Clear date range"><i class="fa-solid fa-xmark"></i> Clear dates</a>
+            @endif
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
                 @foreach(['admitted'=>'Admitted','discharged'=>'Discharged','transferred'=>'Transferred','absconded'=>'Absconded','all'=>'All'] as $val => $label)
-                <a href="?status={{ $val }}&q={{ $q }}"
+                <a href="{{ route('admissions.index', ['status'=>$val,'q'=>$q,'from'=>$from,'to'=>$to]) }}"
                    class="btn btn-sm {{ $status === $val ? 'btn-navy' : 'btn-outline' }}">{{ $label }}</a>
                 @endforeach
             </div>

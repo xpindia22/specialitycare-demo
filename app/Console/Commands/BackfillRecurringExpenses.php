@@ -34,7 +34,7 @@ class BackfillRecurringExpenses extends Command
     private function plan(): array
     {
         return [
-            ['label' => 'Salary - Sample Physician', 'dr' => 'EXP-PAY-DOCTOR',     'cr' => 'CASH',     'amount' => 18000, 'narration' => 'Salary - Sample Physician'],
+            ['label' => 'Salary - Anushika Rajan', 'dr' => 'EXP-PAY-ANUSHIKA',     'cr' => 'CASH',     'amount' => 18000, 'narration' => 'Salary - Anushika Rajan'],
             ['label' => 'Salary - Aparna MTS',     'dr' => 'EXP-PAY-APARNAMTS',    'cr' => 'CASH',     'amount' => 4000,  'narration' => 'Salary - Aparna MTS'],
             ['label' => 'Donation - Fredrick',     'dr' => 'EXP-DON-FREDRICK',     'cr' => 'CASH',     'amount' => 6000,  'narration' => 'Monthly donation - Fredrick'],
             ['label' => 'Rent JHC',                'dr' => 'EXP-RENT',             'cr' => 'BANK-PRI', 'amount' => 20414, 'narration' => 'Clinic rent (JHC)'],
@@ -88,8 +88,8 @@ class BackfillRecurringExpenses extends Command
     {
         $this->line('<comment>1. Payee links</comment>');
 
-        // Sample Physician → EXP-PAY-DOCTOR
-        $this->relinkPayee('Sample Physician', 'EXP-PAY-DOCTOR', $dry);
+        // Anushika → EXP-PAY-ANUSHIKA
+        $this->relinkPayee('Anushika Rajan', 'EXP-PAY-ANUSHIKA', $dry);
         // Aparna → EXP-PAY-APARNAMTS (currently wrongly points at Tea & Refreshments)
         $this->relinkPayee('Aparna MTS', 'EXP-PAY-APARNAMTS', $dry);
 
@@ -227,7 +227,7 @@ class BackfillRecurringExpenses extends Command
         }
 
         // Soft warning: same month, similar amount (±5%), debits a different ledger.
-        // Catches cases like Sample Physician's ₹18,000 posted to generic "Staff Salaries"
+        // Catches cases like Anushika's ₹18,000 posted to generic "Staff Salaries"
         // before the per-payee ledger was linked.
         $warnNote = $this->checkSoftDuplicate($item, $date);
 

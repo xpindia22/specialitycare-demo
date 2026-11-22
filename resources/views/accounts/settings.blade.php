@@ -3,6 +3,8 @@
 @section('page-title','Accounts Settings')
 @section('content')
 
+@include('accounts._toolbar')
+
 <div class="page-header">
     <div class="page-header-left">
         <a href="{{ route('accounts.index') }}" class="text-small"><i class="fa-solid fa-arrow-left"></i> Accounts</a>
@@ -47,6 +49,20 @@
         <div class="text-small text-muted">Default 4 (April) for Indian FY. Voucher numbering resets at the start of each FY.</div>
     </div>
 
+    <div style="margin-top:14px">
+        <label>Books opening date <span class="text-muted text-small">(cutover)</span></label>
+        <input type="date" name="accounts_books_opening_date"
+               value="{{ old('accounts_books_opening_date', $values['accounts_books_opening_date'] ?? '') }}"
+               class="form-control" style="max-width:200px">
+        <div class="text-small text-muted" style="max-width:620px">
+            The date your books start in this system. Reports (Trial Balance, P&amp;L, Balance Sheet, GST)
+            ignore every voucher dated <em>before</em> this day — that earlier position is carried by each
+            ledger's <strong>opening balance</strong> (entered from your migrated Balance Sheet). Set this to
+            avoid double-counting sales/receipts that were auto-posted before the cutover.
+            <strong>Leave blank</strong> to include all history (no floor).
+        </div>
+    </div>
+
     <h3 style="margin-top:18px">Auto-posting</h3>
     <div style="display:flex;flex-direction:column;gap:6px">
         <label style="display:flex;gap:8px;align-items:center">
@@ -59,6 +75,25 @@
             <input type="checkbox" name="accounts_auto_post_purchases" value="1" {{ ($values['accounts_auto_post_purchases'] ?? '1')==='1' ? 'checked' : '' }}>
             <span>When pharmacy stock is received, auto-post a Purchase voucher (Dr Stock + Dr Input CGST/SGST/IGST, Cr Sundry Creditor)</span>
         </label>
+        <label style="display:flex;gap:8px;align-items:center">
+            <input type="hidden" name="accounts_auto_post_dispense" value="0">
+            <input type="checkbox" name="accounts_auto_post_dispense" value="1" {{ ($values['accounts_auto_post_dispense'] ?? '1')==='1' ? 'checked' : '' }}>
+            <span>When medicines are dispensed, auto-post a pharmacy Sales voucher (Dr Cash, Cr Pharmacy Sales). Exempt supply — no output GST.</span>
+        </label>
+    </div>
+
+    <h3 style="margin-top:18px">Pharmacy sale pricing</h3>
+    <div>
+        <label>Markup over cost <span class="text-muted text-small">(%)</span></label>
+        <input type="number" step="0.01" min="0" name="accounts_pharmacy_sale_markup_pct"
+               value="{{ old('accounts_pharmacy_sale_markup_pct', $values['accounts_pharmacy_sale_markup_pct'] ?? '0') }}"
+               class="form-control" style="max-width:200px">
+        <div class="text-small text-muted" style="max-width:620px">
+            Used to value a dispensed medicine's sale <strong>only when the medicine has no selling price set</strong>.
+            The system uses the medicine's <strong>selling price</strong> if available; otherwise it falls back to the
+            stock batch <strong>cost × (1 + this markup)</strong>. Set selling prices on medicines for accurate income;
+            <strong>0%</strong> books unpriced items at cost.
+        </div>
     </div>
 
     <div style="margin-top:16px"><button class="btn btn-primary"><i class="fa-solid fa-save"></i> Save</button></div>

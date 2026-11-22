@@ -7,6 +7,7 @@
         <h1>{{ isset($template->id) ? 'Edit' : 'New' }} Consent Template</h1>
     </div>
     <a href="{{ route('consent-templates.index') }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Back</a>
+    ('templates._toolbar', ['inline'=>true])
 </div>
 
 @if($errors->any())<div class="alert alert-danger"><ul style="margin:0;padding-left:18px">@foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>@endif

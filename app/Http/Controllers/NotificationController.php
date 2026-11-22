@@ -18,6 +18,39 @@ class NotificationController extends Controller
     {
         $items = collect();
 
+        // 0) Unread direct messages — alert the recipient in the bell. One item
+        //    per thread (latest unread), newest first.
+        $uid = auth()->id();
+        DB::table('messages')
+            ->join('message_thread_user as p', function ($j) use ($uid) {
+                $j->on('p.message_thread_id', '=', 'messages.message_thread_id')
+                  ->where('p.user_id', $uid)->whereNull('p.left_at');
+            })
+            ->join('users as sender', 'sender.id', '=', 'messages.user_id')
+            ->whereNull('messages.deleted_at')
+            ->where('messages.user_id', '!=', $uid)
+            ->where(fn ($q) => $q->whereColumn('messages.created_at', '>', 'p.last_read_at')
+                                 ->orWhereNull('p.last_read_at'))
+            ->orderByDesc('messages.created_at')
+            ->limit(20)
+            ->select('messages.message_thread_id', 'messages.body', 'messages.created_at', 'sender.name as sender_name')
+            ->get()
+            ->groupBy('message_thread_id')
+            ->take(6)
+            ->each(function ($group) use ($items) {
+                $m = $group->first();
+                $more = $group->count() > 1 ? ' (+' . ($group->count() - 1) . ' more)' : '';
+                $items->push([
+                    'type'  => 'dm',
+                    'icon'  => 'fa-comment-dots',
+                    'color' => '#16a34a',
+                    'label' => 'Message from ' . $m->sender_name,
+                    'sub'   => \Illuminate\Support\Str::limit(trim(strip_tags($m->body ?? '')), 48) . $more,
+                    'time'  => Carbon::parse($m->created_at)->diffForHumans(),
+                    'url'   => route('messages.thread', $m->message_thread_id),
+                ]);
+            });
+
         // 1) Lab orders completed today — the doctor should review them
         DB::table('lab_orders')
             ->join('patients', 'patients.id', '=', 'lab_orders.patient_id')

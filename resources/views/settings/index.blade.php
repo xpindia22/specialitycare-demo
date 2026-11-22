@@ -5,7 +5,7 @@
 @section('content')
 @php
     $activeSettingsTab = request('tab', session('settings_tab', 'clinic'));
-    $activeSettingsTab = in_array($activeSettingsTab, ['clinic', 'ipd', 'services', 'lab', 'panels', 'allergies', 'chips'], true) ? $activeSettingsTab : 'clinic';
+    $activeSettingsTab = in_array($activeSettingsTab, ['clinic', 'ipd', 'services', 'lab', 'panels', 'allergies', 'chips', 'rules', 'ai_assistant'], true) ? $activeSettingsTab : 'clinic';
     $s = fn($key, $default='') => $settings->get($key)?->value ?? $default;
 @endphp
 <div class="page-header"><div class="page-header-left"><h1>System Settings</h1></div></div>
@@ -19,6 +19,8 @@
     <button class="tab-btn {{ $activeSettingsTab === 'panels' ? 'active' : '' }}" data-tab="panels"><i class="fa-solid fa-layer-group"></i> Panel Pricing</button>
     <button class="tab-btn {{ $activeSettingsTab === 'allergies' ? 'active' : '' }}" data-tab="allergies"><i class="fa-solid fa-triangle-exclamation"></i> Allergy List</button>
     <button class="tab-btn {{ $activeSettingsTab === 'chips' ? 'active' : '' }}" data-tab="chips"><i class="fa-solid fa-tags"></i> Clinical Chips</button>
+    <button class="tab-btn {{ $activeSettingsTab === 'rules' ? 'active' : '' }}" data-tab="rules"><i class="fa-solid fa-bell"></i> Clinical Rules</button>
+    <button class="tab-btn {{ $activeSettingsTab === 'ai_assistant' ? 'active' : '' }}" data-tab="ai_assistant"><i class="fa-solid fa-robot"></i> AI Assistant</button>
 </div>
 
 <!-- Hospital / Clinic Settings -->
@@ -42,6 +44,22 @@
                 <div class="form-group"><label class="form-label">Patient ID Digits</label><input type="number" name="settings[jhc_id_padding]" class="form-control" value="{{ $s('jhc_id_padding','5') }}" min="3" max="10"></div>
                 <div class="form-group"><label class="form-label">Currency Symbol</label><input type="text" name="settings[currency]" class="form-control" value="{{ $s('currency','₹') }}" maxlength="5"></div>
                 <div class="form-group"><label class="form-label">Bill Footer Text</label><input type="text" name="settings[footer_text]" class="form-control" value="{{ $s('footer_text') }}"></div>
+                <div class="form-group"><label class="form-label">Recent Patients in Sidebar</label><input type="number" name="settings[recent_patients_count]" class="form-control" value="{{ $s('recent_patients_count','5') }}" min="1" max="20"><small class="text-muted">How many recently-viewed patients to keep in the left menu (1–20).</small></div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Referral incentive defaults --}}
+    <div class="card" style="margin-top:16px">
+        <div class="card-header"><i class="fa-solid fa-hand-holding-dollar"></i> Referral Incentive Defaults</div>
+        <div class="card-body">
+            <p class="text-muted text-small" style="margin-bottom:14px">
+                Flat incentive auto-credited to a patient's referring doctor (as set on the Referred By dropdown / patient registration). ECG and Echo pay out on every referred study; the consultation rate pays only once — on the patient's very first-ever visit, system-wide. These are separate from each referral source's own %/fixed rate on the Referrals page, which still governs OPD/IPD bill-based incentives.
+            </p>
+            <div class="form-row cols-3">
+                <div class="form-group"><label class="form-label">ECG Referral (₹)</label><input type="number" name="settings[referral_rate_ecg]" class="form-control" value="{{ $s('referral_rate_ecg','100') }}" min="0" step="0.01"></div>
+                <div class="form-group"><label class="form-label">Echo Referral (₹)</label><input type="number" name="settings[referral_rate_echo]" class="form-control" value="{{ $s('referral_rate_echo','500') }}" min="0" step="0.01"></div>
+                <div class="form-group"><label class="form-label">First Consultation Referral (₹)</label><input type="number" name="settings[referral_rate_consultation_first]" class="form-control" value="{{ $s('referral_rate_consultation_first','100') }}" min="0" step="0.01"></div>
             </div>
         </div>
     </div>
@@ -257,6 +275,7 @@
         <div class="card-header">
             <i class="fa-solid fa-flask-vial"></i> Lab Test Prices
             <div class="card-actions">
+                <button type="button" class="btn btn-sm btn-outline" onclick="openProfitBulk('lab')"><i class="fa-solid fa-sack-dollar"></i> Set Profit in Bulk</button>
                 <button type="button" class="btn btn-sm btn-primary" onclick="openTestModal()"><i class="fa-solid fa-plus"></i> Add Test</button>
             </div>
         </div>
@@ -268,7 +287,7 @@
         </div>
         <div class="table-wrap">
             <table class="sc-table">
-                <thead><tr><th>Test Name</th><th>Category</th><th>Code</th><th>Normal Range / Unit</th><th class="text-right">Price (₹)</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
+                <thead><tr><th>Test Name</th><th>Category</th><th>Code</th><th>Normal Range / Unit</th><th class="text-right">Price (₹)</th><th class="text-right" title="What the clinic actually earns out of the price">Profit (₹)</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
                 <tbody>
                 @foreach($labTests as $test)
                 <tr class="lab-test-row {{ $test->is_active ? '' : 'is-inactive' }}" data-search="{{ strtolower($test->name.' '.$test->short_code.' '.$test->category?->name) }}">
@@ -294,6 +313,16 @@
                             <button class="btn btn-sm btn-primary" onclick="saveLabPrice({{ $test->id }})" id="lab-save-btn-{{ $test->id }}" style="display:none"><i class="fa-solid fa-save"></i></button>
                         </div>
                     </td>
+                    <td class="text-right">
+                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
+                            <span id="lab-profit-{{ $test->id }}" class="fw-600" data-price="{{ $test->price }}">
+                                @if($test->profit !== null)₹{{ number_format($test->profit, 2) }} <span class="text-small text-muted" style="font-weight:400">{{ $test->price > 0 ? round($test->profit / $test->price * 100) : 0 }}%</span>@else<span class="text-muted" style="font-weight:400">—</span>@endif
+                            </span>
+                            <input type="number" id="lab-profit-input-{{ $test->id }}" style="display:none;width:100px;padding:4px 8px;border:1px solid var(--sc-border);border-radius:5px;font-size:12px" value="{{ $test->profit }}" step="0.01" min="0" placeholder="₹ profit">
+                            <button class="btn btn-sm btn-outline" onclick="editLabProfit({{ $test->id }})" id="lab-profit-edit-btn-{{ $test->id }}" title="Edit profit"><i class="fa-solid fa-pen"></i></button>
+                            <button class="btn btn-sm btn-primary" onclick="saveLabProfit({{ $test->id }})" id="lab-profit-save-btn-{{ $test->id }}" style="display:none"><i class="fa-solid fa-save"></i></button>
+                        </div>
+                    </td>
                     <td><span class="badge {{ $test->is_active ? 'badge-green' : 'badge-gray' }}">{{ $test->is_active ? 'Active' : 'Inactive' }}</span></td>
                     <td class="text-right">
                         <button type="button" class="btn btn-sm btn-outline"
@@ -304,6 +333,7 @@
                             data-category="{{ $test->lab_category_id }}"
                             data-sample="{{ e($test->sample_type) }}"
                             data-price="{{ $test->price }}"
+                            data-profit="{{ $test->profit }}"
                             data-turnaround="{{ $test->turnaround_hours }}"
                             data-unit="{{ e($test->unit) }}"
                             data-normal="{{ e($test->normal_range) }}"
@@ -339,6 +369,7 @@
         <div class="card-header">
             <i class="fa-solid fa-layer-group"></i> Blood & Lab Panel Prices
             <div class="card-actions">
+                <button type="button" class="btn btn-sm btn-outline" onclick="openProfitBulk('panels')"><i class="fa-solid fa-sack-dollar"></i> Set Profit in Bulk</button>
                 <button type="button" class="btn btn-sm btn-primary" onclick="openPanelModal()"><i class="fa-solid fa-plus"></i> Add Panel</button>
             </div>
         </div>
@@ -350,7 +381,7 @@
         </div>
         <div class="table-wrap">
             <table class="sc-table">
-                <thead><tr><th>Panel Name</th><th>Code</th><th>Included Tests</th><th class="text-right">Price (₹)</th><th class="text-right">Actions</th></tr></thead>
+                <thead><tr><th>Panel Name</th><th>Code</th><th>Included Tests</th><th class="text-right">Price (₹)</th><th class="text-right" title="What the clinic actually earns out of the price">Profit (₹)</th><th class="text-right">Actions</th></tr></thead>
                 <tbody>
                 @foreach($labPanels as $panel)
                 <tr class="panel-row" data-search="{{ strtolower($panel->name.' '.($panel->short_code ?? '').' '.$panel->tests->pluck('name')->implode(' ')) }}">
@@ -366,6 +397,16 @@
                         </div>
                     </td>
                     <td class="text-right">
+                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
+                            <span id="panel-profit-{{ $panel->id }}" class="fw-600">
+                                @if($panel->profit !== null)₹{{ number_format($panel->profit, 2) }} <span class="text-small text-muted" style="font-weight:400">{{ $panel->price > 0 ? round($panel->profit / $panel->price * 100) : 0 }}%</span>@else<span class="text-muted" style="font-weight:400">—</span>@endif
+                            </span>
+                            <input type="number" id="panel-profit-input-{{ $panel->id }}" style="display:none;width:100px;padding:4px 8px;border:1px solid var(--sc-border);border-radius:5px;font-size:12px" value="{{ $panel->profit }}" step="0.01" min="0" placeholder="₹ profit">
+                            <button class="btn btn-sm btn-outline" onclick="editPanelProfit({{ $panel->id }})" id="panel-profit-edit-btn-{{ $panel->id }}" title="Edit profit"><i class="fa-solid fa-pen"></i></button>
+                            <button class="btn btn-sm btn-primary" onclick="savePanelProfit({{ $panel->id }})" id="panel-profit-save-btn-{{ $panel->id }}" style="display:none"><i class="fa-solid fa-save"></i></button>
+                        </div>
+                    </td>
+                    <td class="text-right">
                         <button type="button" class="btn btn-sm btn-outline"
                             onclick="openPanelModal(this)"
                             data-id="{{ $panel->id }}"
@@ -374,6 +415,7 @@
                             data-description="{{ e($panel->description) }}"
                             data-turnaround="{{ $panel->turnaround_hours }}"
                             data-price="{{ $panel->price }}"
+                            data-profit="{{ $panel->profit }}"
                             data-tests="{{ $panel->tests->pluck('id')->join(',') }}">
                             <i class="fa-solid fa-pen"></i> Edit
                         </button>
@@ -389,6 +431,58 @@
                 </tbody>
             </table>
         </div>
+    </div>
+</div>
+
+<!-- Bulk Profit Modal -->
+<div class="modal-overlay" id="profit-bulk-modal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <i class="fa-solid fa-sack-dollar" style="color:var(--sc-green)"></i>
+            <h3>Set Profit in Bulk</h3>
+            <button class="modal-close" onclick="document.getElementById('profit-bulk-modal').classList.remove('open')">&times;</button>
+        </div>
+        <form method="POST" action="{{ route('lab.profit.bulk') }}" onsubmit="return confirmProfitBulk(this)">
+            @csrf
+            <input type="hidden" name="settings_tab" id="profit-bulk-tab" value="lab">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Apply to</label>
+                    <label style="display:flex;gap:8px;align-items:center;margin:0 0 4px;font-weight:400"><input type="checkbox" name="apply_tests" value="1" checked> All individual tests</label>
+                    <label style="display:flex;gap:8px;align-items:center;margin:0;font-weight:400"><input type="checkbox" name="apply_panels" value="1" checked> All panels</label>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Only tests in category <span class="text-muted" style="font-weight:400">(optional; panels are not filtered)</span></label>
+                    <select name="category_id" class="form-control">
+                        <option value="">All categories</option>
+                        @foreach($labCategories as $cat)
+                        <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="form-group">
+                        <label class="form-label">Profit as</label>
+                        <select name="mode" class="form-control" onchange="document.getElementById('profit-bulk-unit').textContent = this.value === 'percent' ? '% of each price' : '₹ per test / panel'">
+                            <option value="percent">% of price</option>
+                            <option value="fixed">Fixed ₹ amount</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Value <span class="text-muted" id="profit-bulk-unit" style="font-weight:400">% of each price</span></label>
+                        <input type="number" name="value" class="form-control" step="0.01" min="0" required placeholder="e.g. 50">
+                    </div>
+                </div>
+                <label style="display:flex;gap:8px;align-items:flex-start;margin:0;font-weight:400">
+                    <input type="checkbox" name="past_orders" value="1" style="margin-top:3px">
+                    <span>Also apply to past orders<br><span class="text-small text-muted">Recalculates profit on lab orders already placed (revenue reports for past dates will change). A fixed amount is capped at each price.</span></span>
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('profit-bulk-modal').classList.remove('open')">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Apply</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -435,6 +529,10 @@
                     <div class="form-group">
                         <label class="form-label">Price (₹) <span class="req">*</span></label>
                         <input type="number" name="price" id="test-price-field" class="form-control" step="0.01" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Profit (₹)</label>
+                        <input type="number" name="profit" id="test-profit-field" class="form-control" step="0.01" min="0" placeholder="Clinic's profit out of the price">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Turnaround (hours)</label>
@@ -495,6 +593,10 @@
                     <div class="form-group">
                         <label class="form-label">Panel Price (₹) <span class="req">*</span></label>
                         <input type="number" name="price" id="panel-price-field" class="form-control" step="0.01" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Profit (₹)</label>
+                        <input type="number" name="profit" id="panel-profit-field" class="form-control" step="0.01" min="0" placeholder="Clinic's profit out of the price">
                     </div>
                 </div>
                 <div class="form-group">
@@ -650,6 +752,177 @@
     </div>
 </div>
 
+{{-- Clinical Rules (reminders / CDS engine) --}}
+<div id="tab-rules" class="tab-pane {{ $activeSettingsTab === 'rules' ? 'active' : '' }}">
+
+    @if(session('success') && (session('settings_tab') === 'rules' || request('tab') === 'rules'))
+    <div style="background:#f0fdf4;border:1px solid #86efac;color:#14532d;border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:13px">
+        <i class="fa-solid fa-circle-check"></i> {{ session('success') }}
+    </div>
+    @endif
+    @if($errors->any() && (session('settings_tab') === 'rules' || old('suggestion') !== null))
+    <div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:13px">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        @foreach($errors->all() as $e) {{ $e }}<br> @endforeach
+    </div>
+    @endif
+
+    <div style="background:#f8fafc;border:1px solid var(--sc-border);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--sc-muted)">
+        <i class="fa-solid fa-circle-info" style="color:var(--sc-teal)"></i>
+        These rules power the <strong>Clinical Reminders</strong> popup on the encounter screen. As the doctor charts vitals
+        and complaints, matching rules surface advisory checks (screenings, vaccines, work-up). Advisory only — nothing is auto-ordered.
+    </div>
+
+    {{-- Add new rule --}}
+    <div class="card" style="margin-bottom:16px">
+        <div class="card-header" style="cursor:pointer" onclick="document.getElementById('rule-add-body').classList.toggle('hidden')">
+            <i class="fa-solid fa-plus-circle" style="color:var(--sc-teal)"></i> Add a new rule
+            <i class="fa-solid fa-chevron-down" style="margin-left:auto;font-size:11px"></i>
+        </div>
+        <div id="rule-add-body" class="card-body {{ $errors->any() && !request()->routeIs('*update*') ? '' : 'hidden' }}" style="padding:14px">
+            <form method="POST" action="{{ route('clinical-rules.store') }}">
+                @csrf
+                @include('settings._rule_fields', ['rule' => null])
+                <div style="margin-top:12px;text-align:right">
+                    <button type="submit" class="btn btn-primary" style="font-size:12px"><i class="fa-solid fa-plus"></i> Add rule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- Existing rules --}}
+    @php
+        $compSym = ['gte' => '≥', 'lte' => '≤', 'gt' => '>', 'lt' => '<', 'eq' => '='];
+        $sevColor = ['urgent' => '#ef4444', 'warning' => '#f59e0b', 'info' => '#3b82f6'];
+    @endphp
+    <div class="card">
+        <div class="card-header" style="gap:8px">
+            <i class="fa-solid fa-bell"></i> Rules
+            <span class="badge badge-navy" style="margin-left:auto">{{ $clinicalRules->count() }}</span>
+        </div>
+        <div class="card-body" style="padding:8px 10px">
+            <div style="position:relative;margin-bottom:10px">
+                <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--sc-muted);font-size:12px"></i>
+                <input type="text" id="cds-rule-search" oninput="cdsFilterRules(this.value)" autocomplete="off"
+                       placeholder="Search rules by name, keyword, category or suggestion…"
+                       class="form-control" style="font-size:12px;padding-left:30px">
+                <span id="cds-rule-search-clear" onclick="document.getElementById('cds-rule-search').value='';cdsFilterRules('')"
+                      style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--sc-muted);font-size:13px"><i class="fa-solid fa-xmark"></i></span>
+            </div>
+            <div id="cds-rule-search-empty" style="display:none;color:var(--sc-muted);font-size:12px;padding:10px;text-align:center">No rules match your search.</div>
+            @forelse($clinicalRules as $rule)
+            @php $cm = $rule->categoryMeta(); @endphp
+            <div class="cds-rule-row" data-search="{{ \Illuminate\Support\Str::lower($rule->name.' '.$rule->suggestion.' '.$rule->keywords.' '.$cm['label'].' '.$rule->category.' '.$rule->match_type.' '.$rule->metric) }}" style="border:1px solid var(--sc-border);border-radius:8px;margin-bottom:8px;overflow:hidden;{{ $rule->is_active ? '' : 'opacity:.55' }}">
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--sc-bg)">
+                    <span title="{{ ucfirst($rule->severity) }}" style="width:9px;height:9px;border-radius:50%;flex:none;background:{{ $sevColor[$rule->severity] ?? '#3b82f6' }}"></span>
+                    <i class="fa-solid {{ $cm['icon'] }}" style="color:{{ $cm['color'] }};flex:none"></i>
+                    <div style="flex:1;min-width:0">
+                        <div style="font-size:13px;font-weight:600;color:var(--sc-navy)">{{ $rule->name }}</div>
+                        <div style="font-size:11px;color:var(--sc-muted)">
+                            @if($rule->match_type === 'keyword')
+                                mentions: <em>{{ \Illuminate\Support\Str::limit($rule->keywords, 60) }}</em>
+                            @elseif($rule->match_type === 'demographic')
+                                age {{ $compSym[$rule->comparator] ?? $rule->comparator }} {{ rtrim(rtrim((string)$rule->value_num,'0'),'.') }}
+                            @else
+                                {{ $rule->metric }} {{ $compSym[$rule->comparator] ?? $rule->comparator }} {{ rtrim(rtrim((string)$rule->value_num,'0'),'.') }}
+                            @endif
+                            @if($rule->gender) · {{ $rule->gender }} @endif
+                            @if($rule->age_min !== null || $rule->age_max !== null) · age {{ $rule->age_min ?? '0' }}–{{ $rule->age_max ?? '∞' }} @endif
+                            · <span style="color:{{ $cm['color'] }}">{{ $cm['label'] }}</span>
+                        </div>
+                    </div>
+                    <form method="POST" action="{{ route('clinical-rules.toggle', $rule) }}" style="margin:0">
+                        @csrf
+                        <button type="submit" title="{{ $rule->is_active ? 'Disable' : 'Enable' }}" style="background:none;border:none;cursor:pointer;color:{{ $rule->is_active ? '#22c55e' : 'var(--sc-muted)' }};font-size:16px">
+                            <i class="fa-solid {{ $rule->is_active ? 'fa-toggle-on' : 'fa-toggle-off' }}"></i>
+                        </button>
+                    </form>
+                    <button type="button" title="Edit" onclick="document.getElementById('rule-edit-{{ $rule->id }}').classList.toggle('hidden')"
+                            style="background:none;border:none;cursor:pointer;color:var(--sc-teal);font-size:13px;padding:2px 6px"><i class="fa-solid fa-pen"></i></button>
+                    <form method="POST" action="{{ route('clinical-rules.destroy', $rule) }}" onsubmit="return confirm('Remove rule “{{ $rule->name }}”?')" style="margin:0">
+                        @csrf @method('DELETE')
+                        <button type="submit" title="Remove" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px;padding:2px 6px"><i class="fa-solid fa-trash-can"></i></button>
+                    </form>
+                </div>
+                <div style="font-size:12px;color:var(--sc-navy);padding:8px 12px 10px 33px">
+                    <i class="fa-solid fa-arrow-right" style="color:var(--sc-muted);font-size:10px"></i> {{ $rule->suggestion }}
+                </div>
+                <div id="rule-edit-{{ $rule->id }}" class="hidden" style="padding:12px;border-top:1px solid var(--sc-border);background:#fff">
+                    <form method="POST" action="{{ route('clinical-rules.update', $rule) }}">
+                        @csrf @method('PUT')
+                        @include('settings._rule_fields', ['rule' => $rule])
+                        <div style="margin-top:12px;text-align:right">
+                            <button type="submit" class="btn btn-primary" style="font-size:12px"><i class="fa-solid fa-check"></i> Save changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            @empty
+            <div style="color:var(--sc-muted);font-size:12px;padding:12px">No rules yet. Add one above.</div>
+            @endforelse
+        </div>
+    </div>
+
+    <script>
+    // Show only the condition fields relevant to the chosen trigger type, per form.
+    function ruleToggleFields(sel) {
+        var form = sel.closest('form');
+        if (!form) return;
+        var isKw = sel.value === 'keyword';
+        form.querySelectorAll('.rule-kw-field').forEach(function (el) { el.style.display = isKw ? '' : 'none'; });
+        form.querySelectorAll('.rule-num-field').forEach(function (el) { el.style.display = isKw ? 'none' : ''; });
+    }
+    document.querySelectorAll('#tab-rules .rule-match-type').forEach(function (s) { ruleToggleFields(s); });
+
+    // Live client-side filter of the rules list.
+    function cdsFilterRules(q) {
+        q = (q || '').trim().toLowerCase();
+        var terms = q.split(/\s+/).filter(Boolean);
+        var rows = document.querySelectorAll('#tab-rules .cds-rule-row');
+        var shown = 0;
+        rows.forEach(function (row) {
+            var hay = row.getAttribute('data-search') || '';
+            var ok = terms.every(function (t) { return hay.indexOf(t) !== -1; });
+            row.style.display = ok ? '' : 'none';
+            if (ok) shown++;
+        });
+        var empty = document.getElementById('cds-rule-search-empty');
+        if (empty) empty.style.display = (rows.length && shown === 0) ? '' : 'none';
+        var clr = document.getElementById('cds-rule-search-clear');
+        if (clr) clr.style.display = q ? '' : 'none';
+    }
+    </script>
+</div>
+
+{{-- AI Assistant --}}
+<div id="tab-ai_assistant" class="tab-pane {{ $activeSettingsTab === 'ai_assistant' ? 'active' : '' }}">
+    @php $aiKeyConfigured = trim((string) setting('ai_assistant_api_key', '')) !== ''; @endphp
+    <div class="card">
+        <div class="card-header"><i class="fa-solid fa-robot"></i> AI Clinical Assistant</div>
+        <div class="card-body">
+            <div style="background:#f8fafc;border:1px solid var(--sc-border);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--sc-muted)">
+                <i class="fa-solid fa-circle-info" style="color:var(--sc-teal)"></i>
+                The AI Clinical Assistant calls Anthropic's Claude API directly, billed to <strong>your own</strong> API key — not the vendor's. Get a key at
+                <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a>, then paste it below. This install also needs the <strong>AI Clinical Assistant</strong> module licensed to appear on the encounter screen (see Admin → Modules).
+            </div>
+            <form method="POST" action="{{ route('settings.update') }}">
+                @csrf
+                <input type="hidden" name="settings_tab" value="ai_assistant">
+                <div class="form-group" style="max-width:480px">
+                    <label class="form-label">
+                        Anthropic API Key
+                        @if($aiKeyConfigured)<span class="badge badge-green" style="margin-left:6px">Configured</span>@else<span class="badge badge-gray" style="margin-left:6px">Not set</span>@endif
+                    </label>
+                    <input type="password" name="settings[ai_assistant_api_key]" class="form-control" autocomplete="off"
+                           placeholder="{{ $aiKeyConfigured ? 'Leave blank to keep the current key' : 'sk-ant-...' }}">
+                    <small class="text-muted">Never displayed once saved. Leave blank when saving to keep the existing key unchanged; enter a new value to replace it.</small>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Save Key</button>
+            </form>
+        </div>
+    </div>
+</div>
+
 </div>
 @endsection
 
@@ -712,12 +985,49 @@ function saveLabPrice(id) {
     $.post(`{{ url('lab/tests') }}/${id}/price`, { price: val }, function(res) {
         if (res.success) {
             document.getElementById('lab-price-' + id).textContent = '₹' + parseFloat(val).toFixed(2);
+            labProfitRender(id, document.getElementById('lab-profit-input-' + id).value, val);
             document.getElementById('lab-price-' + id).style.display = '';
             document.getElementById('lab-price-input-' + id).style.display = 'none';
             document.getElementById('lab-edit-btn-' + id).style.display = '';
             document.getElementById('lab-save-btn-' + id).style.display = 'none';
         }
-    }).fail(function(xhr) { alert('Lab price save failed: ' + xhr.status + ' ' + xhr.responseText); });
+    }).fail(function(xhr) { alert((xhr.responseJSON && xhr.responseJSON.message) || ('Lab price save failed: ' + xhr.status + ' ' + xhr.responseText)); });
+}
+function openProfitBulk(tab) {
+    document.getElementById('profit-bulk-tab').value = tab;
+    document.getElementById('profit-bulk-modal').classList.add('open');
+}
+function confirmProfitBulk(form) {
+    const what = [form.apply_tests.checked ? 'tests' : null, form.apply_panels.checked ? 'panels' : null].filter(Boolean).join(' and ');
+    if (!what) { alert('Choose tests, panels, or both.'); return false; }
+    const how = form.mode.value === 'percent' ? form.value.value + '% of price' : '₹' + form.value.value;
+    return confirm('Set profit to ' + how + ' for all ' + what + '?' + (form.past_orders.checked ? '\n\nPast orders will be recalculated too.' : '') + '\n\nThis replaces the profits currently set.');
+}
+function labProfitRender(id, profit, price) {
+    const el = document.getElementById('lab-profit-' + id);
+    price = parseFloat(price); el.dataset.price = price;
+    if (profit === '' || profit === null || isNaN(parseFloat(profit))) { el.innerHTML = '<span class="text-muted" style="font-weight:400">—</span>'; return; }
+    profit = parseFloat(profit);
+    const pct = price > 0 ? Math.round(profit / price * 100) : 0;
+    el.innerHTML = '₹' + profit.toFixed(2) + ' <span class="text-small text-muted" style="font-weight:400">' + pct + '%</span>';
+}
+function editLabProfit(id) {
+    document.getElementById('lab-profit-' + id).style.display = 'none';
+    document.getElementById('lab-profit-input-' + id).style.display = 'inline-block';
+    document.getElementById('lab-profit-edit-btn-' + id).style.display = 'none';
+    document.getElementById('lab-profit-save-btn-' + id).style.display = 'inline-flex';
+}
+function saveLabProfit(id) {
+    const val = document.getElementById('lab-profit-input-' + id).value;
+    $.post(`{{ url('lab/tests') }}/${id}/profit`, { profit: val }, function(res) {
+        if (res.success) {
+            labProfitRender(id, res.profit, res.price);
+            document.getElementById('lab-profit-' + id).style.display = '';
+            document.getElementById('lab-profit-input-' + id).style.display = 'none';
+            document.getElementById('lab-profit-edit-btn-' + id).style.display = '';
+            document.getElementById('lab-profit-save-btn-' + id).style.display = 'none';
+        }
+    }).fail(function(xhr) { alert((xhr.responseJSON && xhr.responseJSON.message) || ('Lab profit save failed: ' + xhr.status)); });
 }
 function editLabNormal(id) {
     document.getElementById('lab-normal-' + id).style.display = 'none';
@@ -771,6 +1081,7 @@ function openTestModal(button = null) {
         document.getElementById('test-category').value = button.dataset.category || '';
         document.getElementById('test-sample').value = button.dataset.sample || '';
         document.getElementById('test-price-field').value = button.dataset.price || 0;
+        document.getElementById('test-profit-field').value = button.dataset.profit || '';
         document.getElementById('test-turnaround').value = button.dataset.turnaround || '';
         document.getElementById('test-unit').value = button.dataset.unit || '';
         document.getElementById('test-normal').value = button.dataset.normal || '';
@@ -795,14 +1106,41 @@ function savePanelPrice(id) {
         success: function(res) {
             if (res.success) {
                 document.getElementById('panel-price-' + id).textContent = '₹' + parseFloat(val).toFixed(2);
+                panelProfitRender(id, document.getElementById('panel-profit-input-' + id).value, val);
                 document.getElementById('panel-price-' + id).style.display = '';
                 document.getElementById('panel-price-input-' + id).style.display = 'none';
                 document.getElementById('panel-edit-btn-' + id).style.display = '';
                 document.getElementById('panel-save-btn-' + id).style.display = 'none';
             }
         },
-        error: function(xhr) { alert('Panel price save failed: ' + xhr.status + ' ' + xhr.responseText); }
+        error: function(xhr) { alert((xhr.responseJSON && xhr.responseJSON.message) || ('Panel price save failed: ' + xhr.status + ' ' + xhr.responseText)); }
     });
+}
+function panelProfitRender(id, profit, price) {
+    const el = document.getElementById('panel-profit-' + id);
+    price = parseFloat(price);
+    if (profit === '' || profit === null || isNaN(parseFloat(profit))) { el.innerHTML = '<span class="text-muted" style="font-weight:400">—</span>'; return; }
+    profit = parseFloat(profit);
+    const pct = price > 0 ? Math.round(profit / price * 100) : 0;
+    el.innerHTML = '₹' + profit.toFixed(2) + ' <span class="text-small text-muted" style="font-weight:400">' + pct + '%</span>';
+}
+function editPanelProfit(id) {
+    document.getElementById('panel-profit-' + id).style.display = 'none';
+    document.getElementById('panel-profit-input-' + id).style.display = 'inline-block';
+    document.getElementById('panel-profit-edit-btn-' + id).style.display = 'none';
+    document.getElementById('panel-profit-save-btn-' + id).style.display = 'inline-flex';
+}
+function savePanelProfit(id) {
+    const val = document.getElementById('panel-profit-input-' + id).value;
+    $.post(`{{ url('lab/panels') }}/${id}/profit`, { profit: val }, function(res) {
+        if (res.success) {
+            panelProfitRender(id, res.profit, res.price);
+            document.getElementById('panel-profit-' + id).style.display = '';
+            document.getElementById('panel-profit-input-' + id).style.display = 'none';
+            document.getElementById('panel-profit-edit-btn-' + id).style.display = '';
+            document.getElementById('panel-profit-save-btn-' + id).style.display = 'none';
+        }
+    }).fail(function(xhr) { alert((xhr.responseJSON && xhr.responseJSON.message) || ('Panel profit save failed: ' + xhr.status)); });
 }
 
 function updatePanelTestSum() {
@@ -835,6 +1173,7 @@ function openPanelModal(button = null) {
         document.getElementById('panel-description').value = button.dataset.description || '';
         document.getElementById('panel-turnaround').value = button.dataset.turnaround || '';
         document.getElementById('panel-price-field').value = button.dataset.price || 0;
+        document.getElementById('panel-profit-field').value = button.dataset.profit || '';
         const ids = (button.dataset.tests || '').split(',').filter(Boolean);
         $('#panel-tests').val(ids).trigger('change');
     }

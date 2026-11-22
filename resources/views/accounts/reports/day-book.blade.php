@@ -3,6 +3,8 @@
 @section('page-title','Day Book')
 @section('content')
 
+@include('accounts._toolbar')
+
 <div class="page-header">
     <div class="page-header-left">
         <a href="{{ route('accounts.index') }}" class="text-small"><i class="fa-solid fa-arrow-left"></i> Accounts</a>

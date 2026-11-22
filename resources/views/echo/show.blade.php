@@ -3,6 +3,8 @@
 @section('title','Echo '.$echo->record_no)
 @section('page-title','Echo Report')
 @section('content')
+
+@include('diagnostics._toolbar')
 @php
     $ef = $echo->ef_percent;
     $ef = $ef && !str_contains($ef,'%') ? $ef.'%' : $ef;
@@ -51,7 +53,67 @@
             @csrf
             <button type="submit" class="btn btn-success"><i class="fa-solid fa-paper-plane"></i> Send Report</button>
         </form>
+        <button type="button" class="btn btn-outline" onclick="document.getElementById('email-echo-modal').classList.add('open')"><i class="fa-solid fa-envelope"></i> Email</button>
+        <button type="button" class="btn btn-outline" onclick="document.getElementById('whatsapp-echo-modal').classList.add('open')"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
         <a href="{{ route('echo.index') }}" class="btn btn-outline">Back</a>
+    </div>
+</div>
+
+{{-- Email Echo Report modal --}}
+<div id="email-echo-modal" class="modal-overlay d-print-none">
+    <div class="modal-box" style="max-width:480px">
+        <div class="modal-header">
+            <i class="fa-solid fa-envelope" style="color:var(--sc-teal)"></i>
+            <h3>Email Echo Report</h3>
+            <button class="modal-close" onclick="document.getElementById('email-echo-modal').classList.remove('open')">&times;</button>
+        </div>
+        <form method="POST" action="{{ route('echo.email', $echo) }}">
+            @csrf
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+                <div class="form-group" style="margin:0">
+                    <label class="form-label">To <span class="req">*</span></label>
+                    <input type="email" name="to" class="form-control" value="{{ $echo->patient->email ?? '' }}" required>
+                </div>
+                <div class="form-group" style="margin:0">
+                    <label class="form-label">Subject</label>
+                    <input type="text" name="subject" class="form-control" placeholder="Auto-filled if left blank">
+                </div>
+                <div class="form-group" style="margin:0">
+                    <label class="form-label">Message</label>
+                    <textarea name="message" class="form-control" rows="4" placeholder="Auto-filled if left blank"></textarea>
+                </div>
+                <div class="text-muted" style="font-size:11px"><i class="fa-solid fa-info-circle"></i> The echo report PDF is attached automatically.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('email-echo-modal').classList.remove('open')">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-paper-plane"></i> Send</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- WhatsApp Echo Report modal --}}
+<div id="whatsapp-echo-modal" class="modal-overlay d-print-none">
+    <div class="modal-box" style="max-width:480px">
+        <div class="modal-header">
+            <i class="fa-brands fa-whatsapp" style="color:#25D366"></i>
+            <h3>Send Echo Report via WhatsApp</h3>
+            <button class="modal-close" onclick="document.getElementById('whatsapp-echo-modal').classList.remove('open')">&times;</button>
+        </div>
+        <form method="POST" action="{{ route('echo.whatsapp', $echo) }}">
+            @csrf
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+                <div class="form-group" style="margin:0">
+                    <label class="form-label">Send to <span class="req">*</span></label>
+                    <input type="text" name="phone" class="form-control" value="{{ $echo->patient->phone ?? $echo->patient->alt_phone ?? '' }}" required>
+                    <div class="text-muted" style="font-size:11px;margin-top:4px">Defaults to the patient's number — edit to send to a different one.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('whatsapp-echo-modal').classList.remove('open')">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fa-brands fa-whatsapp"></i> Send</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -163,29 +225,49 @@
 
         @php
             $rwmaSegments = [
-                'Anterior'     => $echo->anterior_motion,
-                'Anteroseptal' => $echo->anteroseptal_motion,
-                'Inferior'     => $echo->inferior_motion,
-                'Inferoseptal' => $echo->inferoseptal_motion,
-                'Lateral'      => $echo->lateral_motion,
-                'Posterior'    => $echo->posterior_motion,
-                'Apex'         => $echo->apex_motion,
+                'Anterior'     => ['val' => $echo->anterior_motion,     'terr' => 'LAD'],
+                'Anteroseptal' => ['val' => $echo->anteroseptal_motion, 'terr' => 'LAD'],
+                'Inferior'     => ['val' => $echo->inferior_motion,     'terr' => 'RCA'],
+                'Inferoseptal' => ['val' => $echo->inferoseptal_motion, 'terr' => 'RCA'],
+                'Lateral'      => ['val' => $echo->lateral_motion,      'terr' => 'LCx'],
+                'Posterior'    => ['val' => $echo->posterior_motion,    'terr' => 'LCx / RCA'],
+                'Apex'         => ['val' => $echo->apex_motion,         'terr' => 'LAD / RCA'],
             ];
-            $abnormalSegments = collect($rwmaSegments)->filter(fn($v) => $v && $v !== 'Normal');
-            $hasRwma = $abnormalSegments->isNotEmpty() || !empty($echo->rwma_comments);
+            $abnormalSegments = collect($rwmaSegments)->filter(fn($s) => $s['val'] && $s['val'] !== 'Normal');
+            $hasRwma = $abnormalSegments->isNotEmpty() || !empty($echo->rwma_comments) || !empty($echo->la_clot) || !empty($echo->lv_clot);
         @endphp
         @if($hasRwma)
         <div class="rpt-section-bar">REGIONAL WALL MOTION</div>
-        <table class="rpt-wm" width="100%" cellpadding="0" cellspacing="0">
+        <table class="rpt-doppler" width="100%" cellpadding="0" cellspacing="0">
+            <thead>
+                <tr>
+                    <th style="width:22%">SEGMENT</th>
+                    <th style="width:18%">TERRITORY</th>
+                    <th>WALL MOTION</th>
+                </tr>
+            </thead>
             <tbody>
-                @foreach(array_chunk($rwmaSegments, 2, true) as $pair)
+                @foreach($rwmaSegments as $label => $seg)
                     <tr>
-                        @foreach($pair as $label => $value)
-                            <td class="rpt-wm-lbl">{{ $label }}</td>
-                            <td class="rpt-wm-val">{{ $value ?: '—' }}</td>
-                        @endforeach
+                        <td class="rpt-valve-name">{{ $label }}</td>
+                        <td>{{ $seg['terr'] }}</td>
+                        <td>{{ $seg['val'] ?: 'Normal' }}</td>
                     </tr>
                 @endforeach
+                @if($echo->la_clot)
+                    <tr>
+                        <td class="rpt-valve-name">LA Clot</td>
+                        <td>—</td>
+                        <td>{{ $echo->la_clot }}</td>
+                    </tr>
+                @endif
+                @if($echo->lv_clot)
+                    <tr>
+                        <td class="rpt-valve-name">LV Clot</td>
+                        <td>—</td>
+                        <td>{{ $echo->lv_clot }}</td>
+                    </tr>
+                @endif
             </tbody>
         </table>
         @if($echo->rwma_comments)

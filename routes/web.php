@@ -62,6 +62,7 @@ Route::get('/queue-board', [OpdController::class, 'publicBoard'])->name('opd.pub
 
 // Public online appointment booking (no auth required)
 Route::get('/book',                      [\App\Http\Controllers\Public\BookingController::class, 'show'])->name('public.book.show');
+Route::get('/book/slots', [\App\Http\Controllers\Public\BookingController::class, 'slots'])->middleware('throttle:60,1')->name('public.book.slots');
 Route::post('/book', [\App\Http\Controllers\Public\BookingController::class, 'store'])
     ->middleware('throttle:8,1')
     ->name('public.book.store');
@@ -88,6 +89,8 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/admissions/{admission}/discharge', [AdmissionController::class, 'processDischarge'])->name('admissions.process-discharge');
         Route::get('/admissions/{admission}/summary', [AdmissionController::class, 'summary'])->name('admissions.summary');
         Route::patch('/admissions/{admission}/transfer', [AdmissionController::class, 'transfer'])->name('admissions.transfer');
+        Route::post('/admissions/{admission}/checklist/{item}', [AdmissionController::class, 'clearItem'])->name('admissions.checklist.clear');
+        Route::delete('/admissions/{admission}/checklist/{item}', [AdmissionController::class, 'unclearItem'])->name('admissions.checklist.unclear');
         Route::get('/admissions/{admission}/slip', [AdmissionController::class, 'slip'])->name('admissions.slip');
         Route::resource('admissions', AdmissionController::class)->except(['edit', 'update', 'destroy']);
 
@@ -159,6 +162,18 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/ipd/census/panel', [IpdDashboardController::class, 'censusPanel'])->name('ipd.census.panel');
     });
 
+    // ── ICU: board, patient chart, infusions, drug calculator ──────────
+    Route::middleware(['role:admin,doctor,nurse', 'module:ipd'])->group(function () {
+        Route::get('/icu',                                              [\App\Http\Controllers\IcuController::class, 'board'])->name('icu.board');
+        Route::get('/icu/calculator',                                   [\App\Http\Controllers\IcuController::class, 'calculator'])->name('icu.calculator');
+        Route::get('/icu/{admission}',                                  [\App\Http\Controllers\IcuController::class, 'chart'])->name('icu.chart');
+        Route::post('/icu/{admission}/obs',                             [\App\Http\Controllers\IcuController::class, 'storeObs'])->name('icu.obs.store');
+        Route::post('/icu/{admission}/infusions',                       [\App\Http\Controllers\IcuController::class, 'startInfusion'])->name('icu.infusions.start');
+        Route::post('/icu/{admission}/infusions/{infusion}/change',     [\App\Http\Controllers\IcuController::class, 'changeInfusion'])->name('icu.infusions.change');
+        Route::post('/icu/{admission}/infusions/{infusion}/stop',       [\App\Http\Controllers\IcuController::class, 'stopInfusion'])->name('icu.infusions.stop');
+        Route::delete('/icu/{admission}/infusions/{infusion}',          [\App\Http\Controllers\IcuController::class, 'destroyInfusion'])->name('icu.infusions.destroy');
+    });
+
     // ── Wards & Beds (gated by `ipd` module licence) ────────────────────
     Route::middleware(['role:admin,doctor,nurse,receptionist', 'module:ipd'])->group(function () {
         Route::get('/wards',             [WardController::class, 'index'])->name('wards.index');
@@ -194,6 +209,13 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/opd/{token}/encounter', [OpdController::class, 'startEncounter'])->name('opd.start-encounter');
         Route::post('/opd/{token}/next',      [OpdController::class, 'nextPatient'])->name('opd.next-patient');
         Route::get('/opd/register',          [OpdController::class, 'register'])->name('opd.register');
+        Route::get('/opd/directory',         [OpdController::class, 'directory'])->name('opd.directory');
+        Route::get('/opd/fee-quote',         [\App\Http\Controllers\OpdFeeController::class, 'quote'])->name('opd.fee-quote');
+        Route::get('/opd/referrals',                     [\App\Http\Controllers\OpdReferralController::class, 'index'])->name('opd.referrals.index');
+        Route::post('/encounters/{encounter}/referrals', [\App\Http\Controllers\OpdReferralController::class, 'store'])->name('opd.referrals.store');
+        Route::post('/opd/referrals/{referral}/token',   [\App\Http\Controllers\OpdReferralController::class, 'issueToken'])->name('opd.referrals.token');
+        Route::post('/opd/referrals/{referral}/cancel',  [\App\Http\Controllers\OpdReferralController::class, 'cancel'])->name('opd.referrals.cancel');
+        Route::get('/opd/referrals/{referral}/print',    [\App\Http\Controllers\OpdReferralController::class, 'print'])->name('opd.referrals.print');
         Route::get('/opd/{token}/slip',      [OpdController::class, 'slip'])->name('opd.slip');
     });
 
@@ -218,6 +240,7 @@ Route::middleware(['auth'])->group(function () {
 
         Route::resource('patients', PatientController::class);
         Route::post('patients/{patient}/toggle-active', [PatientController::class, 'toggleActive'])->name('patients.toggle-active');
+        Route::post('patients/{patient}/toggle-pin',    [PatientController::class, 'togglePin'])->name('patients.toggle-pin');
 
         Route::get('/appointments/slots', [AppointmentController::class, 'getSlots'])->name('appointments.slots');
         Route::post('/appointments/{appointment}/checkin', [AppointmentController::class, 'checkin'])->name('appointments.checkin');
@@ -260,14 +283,19 @@ Route::middleware(['auth'])->group(function () {
     // ── Encounters / Clinical (admin, doctor, nurse) ────────────────────
     Route::middleware('role:admin,doctor,nurse')->group(function () {
         Route::get('/encounters', [EncounterController::class, 'index'])->name('encounters.index');
-        Route::get('/encounters/{encounter}', [EncounterController::class, 'show'])->name('encounters.show');
+        Route::get('/deleted-visits', [EncounterController::class, 'deleted'])->name('encounters.deleted');
+        Route::get('/encounters/{encounter}', [EncounterController::class, 'show'])->name('encounters.show')->withTrashed();
         Route::get('/encounters/{encounter}/last-visit', [EncounterController::class, 'lastVisit'])->name('encounters.last-visit');
         Route::post('/encounters/{encounter}/vitals', [EncounterController::class, 'updateVitals'])->name('encounters.vitals');
         Route::post('/encounters/{encounter}/clinical', [EncounterController::class, 'updateClinical'])->name('encounters.clinical');
+        Route::post('/encounters/{encounter}/reminders', [\App\Http\Controllers\ClinicalReminderController::class, 'evaluate'])->name('encounters.reminders');
+        Route::get('/encounters/{encounter}/clinical-print', [EncounterController::class, 'printClinical'])->name('encounters.clinical-print');
         Route::post('/encounters/{encounter}/diagnoses', [EncounterController::class, 'saveDiagnoses'])->name('encounters.diagnoses');
+        Route::get('/encounters/{encounter}/suggest-investigations', [EncounterController::class, 'suggestInvestigations'])->name('encounters.suggest-investigations');
         Route::get('/api/icd-search', [EncounterController::class, 'icdSearch'])->name('icd.search');
         Route::post('/encounters/{encounter}/prescription', [EncounterController::class, 'savePrescription'])->name('encounters.prescription');
         Route::post('/rx-options', [EncounterController::class, 'storeRxOption'])->name('rx-options.store');
+        Route::post('/rx-options/pin', [EncounterController::class, 'pinRxOption'])->name('rx-options.pin');
         Route::put('/encounters/{encounter}/prescriptions/{prescription}',             [EncounterController::class, 'updatePrescription'])->name('encounters.prescriptions.update');
         Route::delete('/encounters/{encounter}/prescriptions/{prescription}',          [EncounterController::class, 'deletePrescription'])->name('encounters.prescriptions.destroy');
         Route::post('/encounters/{encounter}/prescriptions/{prescription}/merge/{target}', [EncounterController::class, 'mergePrescriptions'])->name('encounters.prescriptions.merge');
@@ -279,7 +307,12 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/encounters/{encounter}/reports', [EncounterController::class, 'uploadReport'])->name('encounters.reports.upload');
         Route::delete('/encounters/{encounter}/reports/{report}', [EncounterController::class, 'deleteReport'])->name('encounters.reports.delete');
         Route::post('/encounters/{encounter}/complete', [EncounterController::class, 'complete'])->name('encounters.complete');
-        Route::post('/encounters/{encounter}/ai-chat', [AiAssistantController::class, 'chat'])->name('encounters.ai-chat');
+        Route::post('/encounters/{encounter}/forms/{form}', [\App\Http\Controllers\EncounterFormController::class, 'save'])->name('encounters.forms.save');
+        Route::get('/encounters/{encounter}/forms/{form}/print', [\App\Http\Controllers\EncounterFormController::class, 'print'])->name('encounters.forms.print');
+        Route::delete('/encounters/{encounter}', [EncounterController::class, 'destroy'])->name('encounters.destroy');
+        Route::post('/encounters/{encounter}/restore', [EncounterController::class, 'restore'])->name('encounters.restore')->withTrashed();
+        Route::delete('/encounters/{encounter}/permanent', [EncounterController::class, 'forceDestroy'])->name('encounters.force-destroy')->withTrashed();
+        Route::post('/encounters/{encounter}/ai-chat', [AiAssistantController::class, 'chat'])->name('encounters.ai-chat')->middleware('module:ai_assistant');
     });
 
     // ── Laboratory (admin, doctor, nurse, lab) ──────────────────────────
@@ -288,6 +321,22 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/lab', [LabController::class, 'index'])->name('lab.index');
         Route::get('/lab/order/create', [LabController::class, 'createOrder'])->name('lab.create-order');
         Route::post('/lab/order', [LabController::class, 'storeOrder'])->name('lab.store-order');
+        // Upload a printed/scanned lab report PDF -> parse -> review -> create order+results
+        Route::get('/lab/report/upload', [LabController::class, 'uploadReportForm'])->name('lab.report.upload');
+        Route::post('/lab/report/parse', [LabController::class, 'parseReport'])->name('lab.report.parse');
+        // A stray GET to the POST-only parse URL (old bookmark / refresh of a pre-PRG
+        // page) must not 405 — send it to the review if one is in progress, else upload.
+        Route::get('/lab/report/parse', fn () => session('lab_report_review')
+            ? redirect()->route('lab.report.review')
+            : redirect()->route('lab.report.upload'));
+        Route::get('/lab/report/review', [LabController::class, 'reviewReport'])->name('lab.report.review');
+        Route::post('/lab/report/store', [LabController::class, 'storeReport'])->name('lab.report.store');
+        // Pending lab reports (queued from WhatsApp/inbound) — match to a patient & confirm
+        Route::get('/lab/pending', [LabController::class, 'pendingReports'])->name('lab.pending');
+        Route::get('/lab/pending/{pending}/review', [LabController::class, 'reviewPending'])->name('lab.pending.review');
+        Route::post('/lab/pending/{pending}/reject', [LabController::class, 'rejectPending'])->name('lab.pending.reject');
+        // Encounters of a patient (JSON) — populate the "attach to visit" dropdown on report review
+        Route::get('/lab/patient/{patient}/encounters', [LabController::class, 'patientEncounters'])->name('lab.patient-encounters');
         Route::get('/lab/order/{order}', [LabController::class, 'showOrder'])->name('lab.order');
         Route::post('/lab/order/{order}/status', [LabController::class, 'updateStatus'])->name('lab.update-status');
         Route::post('/lab/item/{item}/results', [LabController::class, 'saveResults'])->name('lab.save-results');
@@ -306,15 +355,18 @@ Route::middleware(['auth'])->group(function () {
             Route::put('/lab/tests/{test}', [LabController::class, 'updateTest'])->name('lab.tests.update');
             Route::patch('/lab/tests/{test}/price', [LabController::class, 'updateTestPrice'])->name('lab.tests.price');
             Route::post('/lab/tests/{test}/price', [LabController::class, 'updateTestPrice'])->name('lab.test-price');
+            Route::post('/lab/tests/{test}/profit', [LabController::class, 'updateTestProfit'])->name('lab.tests.profit');
             Route::post('/lab/tests/{test}/normal', [LabController::class, 'updateTestNormalValues'])->name('lab.tests.normal');
             Route::patch('/lab/tests/{test}/toggle', [LabController::class, 'toggleTest'])->name('lab.tests.toggle');
             Route::post('/lab/tests/{test}/toggle', [LabController::class, 'toggleTest'])->name('lab.tests.toggle-post');
             Route::delete('/lab/tests/{test}', [LabController::class, 'destroyTest'])->name('lab.tests.destroy');
             Route::post('/lab/tests/bulk-price', [LabController::class, 'bulkUpdatePrice'])->name('lab.tests.bulk-price');
+            Route::post('/lab/profit-bulk', [LabController::class, 'bulkSetProfit'])->name('lab.profit.bulk');
             Route::get('/lab/panels', [LabController::class, 'panels'])->name('lab.panels');
             Route::post('/lab/panels', [LabController::class, 'storePanel'])->name('lab.panels.store');
             Route::put('/lab/panels/{panel}', [LabController::class, 'updatePanel'])->name('lab.panels.update');
             Route::patch('/lab/panels/{panel}/price', [LabController::class, 'updatePanelPrice'])->name('lab.panels.price');
+            Route::post('/lab/panels/{panel}/profit', [LabController::class, 'updatePanelProfit'])->name('lab.panels.profit');
             Route::patch('/lab/panels/{panel}/toggle', [LabController::class, 'togglePanel'])->name('lab.panels.toggle');
             Route::delete('/lab/panels/{panel}', [LabController::class, 'destroyPanel'])->name('lab.panels.destroy');
         });
@@ -322,6 +374,7 @@ Route::middleware(['auth'])->group(function () {
 
     // ── ECG (admin, doctor, nurse) ──────────────────────────────────────
     Route::middleware('role:admin,doctor,nurse')->group(function () {
+        Route::post('/ecg/read', [EcgController::class, 'read'])->name('ecg.read');
         Route::resource('ecg', EcgController::class);
         Route::delete('/ecg/{ecg}/file', [EcgController::class, 'destroyFile'])->name('ecg.file.destroy');
     });
@@ -387,6 +440,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/billing/{bill}', [BillingController::class, 'show'])->name('billing.show');
         Route::post('/billing/{bill}/payment', [BillingController::class, 'addPayment'])->name('billing.payment');
         Route::post('/billing/{bill}/status', [BillingController::class, 'updateStatus'])->name('billing.status');
+        Route::post('/billing/{bill}/date', [BillingController::class, 'updateBillDate'])->name('billing.date');
+        Route::post('/billing/{bill}/payments/{payment}/date', [BillingController::class, 'updatePaymentDate'])->name('billing.payment-date');
+        Route::delete('/billing/{bill}/payments/{payment}', [BillingController::class, 'destroyPayment'])->name('billing.payment.destroy');
+        Route::delete('/billing/{bill}', [BillingController::class, 'destroy'])->name('billing.destroy');
         Route::get('/billing/{bill}/print', [BillingController::class, 'print'])->name('billing.print');
         Route::get('/billing/{bill}/pdf', [BillingController::class, 'pdf'])->name('billing.pdf');
     });
@@ -400,6 +457,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/reports/day-end',              [ReportsController::class, 'dayEndReport'])->name('reports.day-end');
         Route::get('/reports/outstanding-dues',     [ReportsController::class, 'outstandingDues'])->name('reports.outstanding-dues');
         Route::get('/reports/follow-up',            [ReportsController::class, 'followUpTracker'])->name('reports.follow-up');
+        Route::post('/reports/follow-up/{encounter}/remind-whatsapp', [ReportsController::class, 'followUpRemindWhatsApp'])->name('reports.follow-up.remind-whatsapp');
+        Route::post('/reports/follow-up/{encounter}/remind-email',    [ReportsController::class, 'followUpRemindEmail'])->name('reports.follow-up.remind-email');
         Route::get('/reports/revenue',              [ReportsController::class, 'revenueDashboard'])->name('reports.revenue');
         Route::get('/reports/packages',             [ReportsController::class, 'packageUsage'])->name('reports.packages');
         Route::get('/reports/diagnoses',            [ReportsController::class, 'diagnosisAnalytics'])->name('reports.diagnoses');
@@ -410,18 +469,56 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/patients/{patient}/vaccinations/print',           [\App\Http\Controllers\VaccinationController::class, 'print'])->name('vaccinations.print');
         Route::get('/patients/{patient}/growth',                       [PatientController::class, 'growthCharts'])->name('patients.growth');
 
+        // Diabetes diary — blood-sugar + medicine log with auto-analysis (no encounter needed)
+        Route::get('/patients/{patient}/glucose-log',                  [\App\Http\Controllers\GlucoseLogController::class, 'index'])->name('glucose.index');
+        Route::post('/patients/{patient}/glucose-log',                 [\App\Http\Controllers\GlucoseLogController::class, 'store'])->name('glucose.store');
+        Route::put('/patients/{patient}/glucose-log/{glucoseLog}',     [\App\Http\Controllers\GlucoseLogController::class, 'update'])->name('glucose.update');
+        Route::post('/patients/{patient}/glucose-log/{glucoseLog}/food-time', [\App\Http\Controllers\GlucoseLogController::class, 'updateFoodTime'])->name('glucose.food-time');
+        Route::delete('/patients/{patient}/glucose-log/{glucoseLog}',  [\App\Http\Controllers\GlucoseLogController::class, 'destroy'])->name('glucose.destroy');
+        Route::get('/patients/{patient}/glucose-log/print',            [\App\Http\Controllers\GlucoseLogController::class, 'print'])->name('glucose.print');
+
+        // Blood-pressure diary — readings + medicines with auto-analysis (no encounter needed)
+        Route::get('/patients/{patient}/bp-log',                       [\App\Http\Controllers\BpLogController::class, 'index'])->name('bp.index');
+        Route::post('/patients/{patient}/bp-log',                      [\App\Http\Controllers\BpLogController::class, 'store'])->name('bp.store');
+        Route::put('/patients/{patient}/bp-log/{bpLog}',               [\App\Http\Controllers\BpLogController::class, 'update'])->name('bp.update');
+        Route::delete('/patients/{patient}/bp-log/{bpLog}',            [\App\Http\Controllers\BpLogController::class, 'destroy'])->name('bp.destroy');
+        Route::get('/patients/{patient}/bp-log/print',                 [\App\Http\Controllers\BpLogController::class, 'print'])->name('bp.print');
+
+        // Health tracker — weight / heart-rate / SpO2 / stress + diet & exercise (no encounter needed)
+        Route::get('/patients/{patient}/health',                       [\App\Http\Controllers\HealthTrackerController::class, 'index'])->name('health.index');
+        Route::post('/patients/{patient}/health/metric',               [\App\Http\Controllers\HealthTrackerController::class, 'storeMetric'])->name('health.metric.store');
+        Route::post('/patients/{patient}/health/diet',                 [\App\Http\Controllers\HealthTrackerController::class, 'storeDiet'])->name('health.diet.store');
+        Route::post('/patients/{patient}/health/exercise',             [\App\Http\Controllers\HealthTrackerController::class, 'storeExercise'])->name('health.exercise.store');
+        Route::put   ('/patients/{patient}/health/metric/{healthMetric}',    [\App\Http\Controllers\HealthTrackerController::class, 'updateMetric'])->name('health.metric.update');
+        Route::put   ('/patients/{patient}/health/diet/{dietLog}',           [\App\Http\Controllers\HealthTrackerController::class, 'updateDiet'])->name('health.diet.update');
+        Route::delete('/patients/{patient}/health/metric/{healthMetric}',   [\App\Http\Controllers\HealthTrackerController::class, 'destroyMetric'])->name('health.metric.destroy');
+        Route::delete('/patients/{patient}/health/diet/{dietLog}',          [\App\Http\Controllers\HealthTrackerController::class, 'destroyDiet'])->name('health.diet.destroy');
+        Route::delete('/patients/{patient}/health/exercise/{exerciseLog}',  [\App\Http\Controllers\HealthTrackerController::class, 'destroyExercise'])->name('health.exercise.destroy');
+
+        // AI medicine suggestions (advisory decision support) — admin/doctor only
+        Route::post('/patients/{patient}/ai-suggestions',              [\App\Http\Controllers\AiSuggestionController::class, 'suggest'])->middleware('role:admin,doctor')->name('ai.suggest');
+
         // Consent templates (admin)
         Route::resource('consent-templates', \App\Http\Controllers\ConsentTemplateController::class)->except(['show']);
         Route::post('/patients/{patient}/consent/generate', [\App\Http\Controllers\ConsentTemplateController::class, 'generate'])->name('consent.generate');
 
-        // Email a prescription / bill
-        Route::post('/prescriptions/{prescription}/email', [\App\Http\Controllers\EmailDocumentController::class, 'emailPrescription'])->name('prescriptions.email');
-        Route::post('/bills/{bill}/email',                 [\App\Http\Controllers\EmailDocumentController::class, 'emailBill'])->name('bills.email');
+        // Manual "send to patient" — email + WhatsApp, always available regardless
+        // of the notification_preferences auto-send toggle (Admin → Notification
+        // Preferences controls automatic sends only).
+        Route::post('/prescriptions/{prescription}/email',    [\App\Http\Controllers\EmailDocumentController::class, 'emailPrescription'])->name('prescriptions.email');
+        Route::post('/prescriptions/{prescription}/whatsapp', [\App\Http\Controllers\WhatsAppDocumentController::class, 'sendPrescription'])->name('prescriptions.whatsapp');
+        Route::post('/bills/{bill}/email',                    [\App\Http\Controllers\EmailDocumentController::class, 'emailBill'])->name('bills.email');
+        Route::post('/bills/{bill}/whatsapp',                 [\App\Http\Controllers\WhatsAppDocumentController::class, 'sendBill'])->name('bills.whatsapp');
+        Route::post('/lab/order/{order}/email',               [\App\Http\Controllers\EmailDocumentController::class, 'emailLabReport'])->name('lab.email');
+        Route::post('/lab/order/{order}/whatsapp',            [\App\Http\Controllers\WhatsAppDocumentController::class, 'sendLabReport'])->name('lab.whatsapp');
+        Route::post('/echo/{echo}/email',                     [\App\Http\Controllers\EmailDocumentController::class, 'emailEchoReport'])->name('echo.email');
+        Route::post('/echo/{echo}/whatsapp',                  [\App\Http\Controllers\WhatsAppDocumentController::class, 'sendEchoReport'])->name('echo.whatsapp');
 
         // Backup & export
         Route::get('/admin/backup',                    [\App\Http\Controllers\BackupController::class, 'index'])->name('admin.backup');
         Route::post('/admin/backup/run',               [\App\Http\Controllers\BackupController::class, 'runBackup'])->name('admin.backup.run');
         Route::get('/admin/backup/download/{name}',    [\App\Http\Controllers\BackupController::class, 'download'])->name('admin.backup.download');
+        Route::post('/admin/backup/delete',            [\App\Http\Controllers\BackupController::class, 'deleteBackups'])->name('admin.backup.delete');
         Route::get('/admin/export/{table}.csv',        [\App\Http\Controllers\BackupController::class, 'exportCsv'])->name('admin.export.csv');
         Route::get('/reports/outstanding-dues/export', [ReportsController::class, 'exportOutstandingDues'])->name('reports.outstanding-dues.export');
         Route::get('/reports/follow-up/export',     [ReportsController::class, 'exportFollowUp'])->name('reports.follow-up.export');
@@ -511,6 +608,20 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('role:admin,nurse')->group(function () {
         Route::post('/ipd/room-charges', [ReportsController::class, 'generateRoomCharges'])->name('ipd.room-charges');
         Route::resource('doctors', DoctorController::class);
+        Route::post('/doctors/{doctor}/schedule', [DoctorController::class, 'updateSchedule'])->name('doctors.schedule');
+        Route::post('/doctors/{doctor}/leaves', [DoctorController::class, 'storeLeave'])->name('doctors.leaves.store');
+        Route::delete('/doctors/{doctor}/leaves/{leave}', [DoctorController::class, 'destroyLeave'])->name('doctors.leaves.destroy');
+        Route::get('/departments', [\App\Http\Controllers\DepartmentController::class, 'index'])->name('departments.index');
+        Route::post('/departments', [\App\Http\Controllers\DepartmentController::class, 'store'])->name('departments.store');
+        Route::put('/departments/{department}', [\App\Http\Controllers\DepartmentController::class, 'update'])->name('departments.update');
+        Route::post('/departments/{department}/toggle', [\App\Http\Controllers\DepartmentController::class, 'toggle'])->name('departments.toggle');
+        Route::get('/opd/fee-rules', [\App\Http\Controllers\OpdFeeController::class, 'index'])->name('opd.fees.index');
+        Route::post('/opd/fee-rules', [\App\Http\Controllers\OpdFeeController::class, 'storeRule'])->name('opd.fees.store');
+        Route::put('/opd/fee-rules/{rule}', [\App\Http\Controllers\OpdFeeController::class, 'updateRule'])->name('opd.fees.update');
+        Route::delete('/opd/fee-rules/{rule}', [\App\Http\Controllers\OpdFeeController::class, 'destroyRule'])->name('opd.fees.destroy');
+        Route::post('/opd/discounts', [\App\Http\Controllers\OpdFeeController::class, 'storeDiscount'])->name('opd.discounts.store');
+        Route::put('/opd/discounts/{discount}', [\App\Http\Controllers\OpdFeeController::class, 'updateDiscount'])->name('opd.discounts.update');
+        Route::delete('/opd/discounts/{discount}', [\App\Http\Controllers\OpdFeeController::class, 'destroyDiscount'])->name('opd.discounts.destroy');
         // Duty roster routes MUST come before Route::resource('staff') —
         // otherwise staff/{staff} matches staff/duty-roster and routes to the
         // (non-existent) StaffController::show.
@@ -528,9 +639,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/users/{user}/edit',           [UserController::class, 'edit'])->name('users.edit');
             Route::post('/users/{user}/reset-password',[UserController::class, 'resetPassword'])->name('users.reset-password');
             Route::post('/users/{user}/roles',         [UserController::class, 'updateRoles'])->name('users.roles');
+            Route::post('/users/{user}/delete-visits', [UserController::class, 'updateDeleteVisits'])->name('users.delete-visits');
         });
         // Login activity log (IP + country) — owner-only (the controller
-        // 403s any non-owner in its index action).
+        // 403s any non-owner in its constructor).
         Route::get('/admin/login-activity', [\App\Http\Controllers\Admin\LoginActivityController::class, 'index'])
             ->name('admin.login-activity');
         Route::get('/logs', [ActivityLogController::class, 'index'])->name('logs.index');
@@ -541,6 +653,11 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/clinical-chips',                  [ClinicalChipController::class, 'store'])->name('clinical-chips.store');
         Route::put('/clinical-chips/{chip}',            [ClinicalChipController::class, 'update'])->name('clinical-chips.update');
         Route::delete('/clinical-chips/{chip}',         [ClinicalChipController::class, 'destroy'])->name('clinical-chips.destroy');
+        // Clinical reminder rules (Settings → Clinical Rules tab) — advisory CDS popup engine
+        Route::post('/clinical-rules',                  [\App\Http\Controllers\ClinicalRuleController::class, 'store'])->name('clinical-rules.store');
+        Route::put('/clinical-rules/{clinical_rule}',   [\App\Http\Controllers\ClinicalRuleController::class, 'update'])->name('clinical-rules.update');
+        Route::post('/clinical-rules/{clinical_rule}/toggle', [\App\Http\Controllers\ClinicalRuleController::class, 'toggle'])->name('clinical-rules.toggle');
+        Route::delete('/clinical-rules/{clinical_rule}', [\App\Http\Controllers\ClinicalRuleController::class, 'destroy'])->name('clinical-rules.destroy');
         Route::resource('certificates', CertificateController::class)->except(['edit', 'update']);
         Route::get('/certificates/{certificate}/print', [CertificateController::class, 'print'])->name('certificates.print');
     });
@@ -667,6 +784,10 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/import/upload-script', [ImportController::class, 'uploadScript'])->name('import.upload-script');
         Route::post('/import/run', [ImportController::class, 'runImport'])->name('import.run');
         Route::post('/import/openemr', [ImportController::class, 'importOpenEMR'])->name('import.openemr');
+
+        // Export / migrate SpecialityCare -> OpenEMR (reverse of Import)
+        Route::get('/export-openemr', [\App\Http\Controllers\ExportController::class, 'index'])->name('export.index');
+        Route::post('/export-openemr/run', [\App\Http\Controllers\ExportController::class, 'runExport'])->name('export.run');
     });
 
     // ── Forum & Messaging (gated by `forum` module license) ─────────────
@@ -811,3 +932,11 @@ Route::prefix('owner')->name('owner.')->group(function () {
 // the spoofer already knows about.
 Route::post('/api/license/heartbeat', [\App\Http\Controllers\Api\HeartbeatReceiver::class, 'store'])
     ->name('api.license.heartbeat');
+
+// Inbound WhatsApp (Gupshup BSP) — patients message their vitals to the clinic
+// number; this parses them into the diaries and replies a confirmation. Public
+// (no auth/CSRF); guarded by ?token= matching services.whatsapp.gupshup.inbound_token.
+// Token may be passed as a path segment (Gupshup's callback field rejects query
+// strings) or as ?token=. GET returns 200 so a provider's save-time URL check passes.
+Route::match(['get', 'post'], '/webhooks/whatsapp/inbound/{token?}', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'handle'])
+    ->name('webhooks.whatsapp.inbound');

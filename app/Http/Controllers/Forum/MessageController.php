@@ -739,19 +739,33 @@ class MessageController extends Controller
     public function unreadCount()
     {
         $u = auth()->user();
-        $count = DB::table('messages')
+        $unread = DB::table('messages')
             ->join('message_thread_user as p', function ($j) use ($u) {
                 $j->on('p.message_thread_id', '=', 'messages.message_thread_id')
                   ->where('p.user_id', $u->id)
                   ->whereNull('p.left_at');
             })
+            ->join('users as sender', 'sender.id', '=', 'messages.user_id')
+            ->whereNull('messages.deleted_at')
             ->where('messages.user_id', '!=', $u->id)
             ->where(function ($q) {
                 $q->whereColumn('messages.created_at', '>', 'p.last_read_at')
                   ->orWhereNull('p.last_read_at');
-            })
-            ->count();
-        return response()->json(['count' => $count]);
+            });
+
+        $count  = (clone $unread)->count();
+        $latest = (clone $unread)->orderByDesc('messages.created_at')
+            ->select('messages.message_thread_id', 'messages.body', 'sender.name as sender_name')
+            ->first();
+
+        return response()->json([
+            'count'  => $count,
+            'latest' => $latest ? [
+                'from'    => $latest->sender_name,
+                'snippet' => \Illuminate\Support\Str::limit(trim(strip_tags($latest->body ?? '')), 60),
+                'url'     => route('messages.thread', $latest->message_thread_id),
+            ] : null,
+        ]);
     }
 
     private function assertParticipant(MessageThread $thread, User $user): void

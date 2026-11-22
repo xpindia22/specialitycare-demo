@@ -56,7 +56,7 @@
 
 <div class="letterhead">
     <div>
-        <div class="clinic-name">{{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}</div>
+        <div class="clinic-name">{{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}</div>
         <div style="font-size:9pt;color:#555">{{ setting('clinic_address','') }}</div>
     </div>
     <div style="text-align:right;font-size:9.5pt;color:#555">
@@ -134,7 +134,7 @@
 </div>
 
 <div class="sig-row">
-    <div class="sig-box">Nurse Signature<br><span style="font-size:8pt;color:#777">{{ setting('clinic_name','Demo Clinic Pvt. Ltd.') }}</span></div>
+    <div class="sig-box">Nurse Signature<br><span style="font-size:8pt;color:#777">{{ setting('clinic_name','James Heart Care Pvt. Ltd.') }}</span></div>
 </div>
 
 </body>

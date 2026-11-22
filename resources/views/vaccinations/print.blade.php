@@ -31,7 +31,7 @@ th { background:#f8fafc;color:#475569;font-weight:600;font-size:11px;text-transf
 @if(setting('print_header_enabled','1') !== '0')
 <div class="header">
     <div>
-        <div class="clinic">{{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}</div>
+        <div class="clinic">{{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}</div>
         <div style="font-size:11px;color:#64748b;margin-top:2px">{{ setting('clinic_address', '') }}</div>
     </div>
     <div style="text-align:right">

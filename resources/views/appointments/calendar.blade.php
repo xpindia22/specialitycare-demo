@@ -18,8 +18,7 @@
             <option value="{{ $doc->id }}" {{ $doctorId == $doc->id ? 'selected' : '' }}>{{ $doc->full_name }}</option>
             @endforeach
         </select>
-        <a href="{{ route('appointments.index') }}" class="btn btn-outline btn-sm"><i class="fa-solid fa-list"></i> List</a>
-        <a href="{{ route('appointments.create') }}" class="btn btn-primary btn-sm"><i class="fa-solid fa-plus"></i> New</a>
+        @include('reception._toolbar', ['inline'=>true])
     </div>
 </div>
 

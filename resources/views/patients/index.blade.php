@@ -8,14 +8,14 @@
         <h1>Patients</h1>
         <div class="breadcrumb">All registered patients</div>
     </div>
-    <a href="{{ route('patients.create') }}" class="btn btn-primary"><i class="fa-solid fa-user-plus"></i> Register Patient</a>
+    @include('reception._toolbar', ['inline'=>true])
 </div>
 
 <div class="card mb-3">
     <div class="card-body" style="padding:14px 20px">
-        <form method="GET" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+        <form method="GET" id="patients-filter-form" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
             <div class="form-group" style="flex:1;min-width:200px;margin:0">
-                <input type="text" name="search" class="form-control" placeholder="Search by name, JHC ID, phone…" value="{{ request('search') }}">
+                <input type="text" name="search" id="patients-live-search" class="form-control" placeholder="Search by name, JHC ID, phone…" value="{{ request('search') }}" autocomplete="off">
             </div>
             <div class="form-group" style="margin:0">
                 <select name="gender" class="form-control" style="width:130px">
@@ -92,11 +92,13 @@
             </thead>
             <tbody>
             @forelse($patients as $p)
-            <tr>
+            <tr style="cursor:pointer{{ $p->is_pinned ? ';background:#fffbeb' : '' }}"
+                onclick="if(!event.target.closest('a,button,form,input,select,label')) location='{{ route('patients.show', $p) }}'">
                 <td><span class="badge badge-navy mono">{{ $p->jhc_id }}</span>
                     @if($p->openemr_pid)<div class="text-small text-muted">OpenEMR: {{ $p->openemr_pid }}</div>@endif
                 </td>
                 <td>
+                    @if($p->is_pinned)<i class="fa-solid fa-thumbtack" style="color:#d97706;font-size:11px;margin-right:4px" title="Pinned"></i>@endif
                     <a href="{{ route('patients.show', $p) }}" style="font-weight:600;color:var(--sc-navy);text-decoration:none">
                         {{ $p->full_name }}
                     </a>
@@ -112,6 +114,13 @@
                         <a href="{{ route('patients.show', $p) }}" class="btn btn-sm btn-outline" title="View"><i class="fa-solid fa-eye"></i></a>
                         <a href="{{ route('appointments.create', ['patient_id' => $p->id]) }}" class="btn btn-sm btn-primary" title="Book Appointment"><i class="fa-solid fa-calendar-plus"></i></a>
                         <a href="{{ route('patients.edit', $p) }}" class="btn btn-sm btn-outline" title="Edit"><i class="fa-solid fa-pen"></i></a>
+                        <form method="POST" action="{{ route('patients.toggle-pin', $p) }}" style="display:inline">
+                            @csrf
+                            <button type="submit" class="btn btn-sm btn-outline" title="{{ $p->is_pinned ? 'Unpin' : 'Pin to top' }}"
+                                style="{{ $p->is_pinned ? 'color:#d97706;border-color:#d97706' : '' }}">
+                                <i class="fa-solid fa-thumbtack" style="{{ $p->is_pinned ? '' : 'opacity:.45' }}"></i>
+                            </button>
+                        </form>
                     </div>
                 </td>
             </tr>
@@ -131,3 +140,22 @@
     <div class="card-footer">{{ $patients->links() }}</div>
 </div>
 @endsection
+@push('scripts')
+<script>
+(function () {
+    var form  = document.getElementById('patients-filter-form');
+    var input = document.getElementById('patients-live-search');
+    if (!form || !input) return;
+    var timer;
+    // Auto-submit on text input after 350ms pause
+    input.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(function () { form.submit(); }, 350);
+    });
+    // Auto-submit when any dropdown filter changes immediately
+    form.querySelectorAll('select').forEach(function (sel) {
+        sel.addEventListener('change', function () { clearTimeout(timer); form.submit(); });
+    });
+})();
+</script>
+@endpush

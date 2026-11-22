@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title','OPD Daily Register — ' . \Carbon\Carbon::parse($date)->format('d M Y'))
+@section('title','OPD Register — ' . ($from === $to ? \Carbon\Carbon::parse($from)->format('d M Y') : \Carbon\Carbon::parse($from)->format('d M Y').' to '.\Carbon\Carbon::parse($to)->format('d M Y')))
 @section('page-title','OPD Daily Register')
 @section('content')
 
@@ -50,30 +50,37 @@
         <h1>OPD Daily Register</h1>
         <div class="breadcrumb"><a href="{{ route('opd.index') }}">OPD</a> &rsaquo; Daily Register</div>
     </div>
-    <div style="display:flex;gap:10px;align-items:center">
-        <form method="GET" style="display:flex;gap:8px;align-items:center">
-            <input type="date" name="date" value="{{ $date }}" class="form-control" style="width:160px">
-            <select name="doctor_id" class="form-control" style="width:200px">
-                <option value="">All Doctors</option>
-                @foreach($doctors as $d)
-                <option value="{{ $d->id }}" {{ $doctorId == $d->id ? 'selected' : '' }}>Dr. {{ $d->first_name }} {{ $d->last_name }}</option>
-                @endforeach
-            </select>
-            <button type="submit" class="btn btn-primary">Apply</button>
-        </form>
-        <button onclick="window.print()" class="btn btn-outline">
-            <i class="fa-solid fa-print"></i> Print Register
-        </button>
-    </div>
+    @include('opd._toolbar', ['inline'=>true, 'extra' => [
+        ['url'=>'#', 'onclick'=>'window.print();return false;', 'icon'=>'fa-print', 'label'=>'Print Register', 'bg'=>'#0f766e'],
+    ]])
 </div>
+
+{{-- Filter bar --}}
+<form method="GET" class="no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+    <label class="text-small text-muted" style="align-self:center">From</label>
+    <input type="date" name="from" value="{{ $from }}" class="form-control" style="width:150px">
+    <label class="text-small text-muted" style="align-self:center">To</label>
+    <input type="date" name="to" value="{{ $to }}" class="form-control" style="width:150px">
+    <select name="doctor_id" class="form-control" style="width:190px">
+        <option value="">All Doctors</option>
+        @foreach($doctors as $d)
+        <option value="{{ $d->id }}" {{ $doctorId == $d->id ? 'selected' : '' }}>Dr. {{ $d->first_name }} {{ $d->last_name }}</option>
+        @endforeach
+    </select>
+    <button type="submit" class="btn btn-primary">Apply</button>
+    <a href="{{ route('opd.register', ['doctor_id' => $doctorId, 'from' => today()->toDateString(), 'to' => today()->toDateString()]) }}" class="btn btn-outline {{ $from === $to && $from === today()->toDateString() ? 'btn-primary' : '' }}"><i class="fa-solid fa-calendar-day"></i> Today</a>
+    <a href="{{ route('opd.register', ['doctor_id' => $doctorId, 'from' => today()->subDay()->toDateString(), 'to' => today()->subDay()->toDateString()]) }}" class="btn btn-outline"><i class="fa-solid fa-calendar-minus"></i> Yesterday</a>
+    <a href="{{ route('opd.register', ['doctor_id' => $doctorId, 'from' => today()->subDays(6)->toDateString(), 'to' => today()->toDateString()]) }}" class="btn btn-outline"><i class="fa-solid fa-calendar-week"></i> Last Week</a>
+    <a href="{{ route('opd.register', ['doctor_id' => $doctorId, 'from' => today()->subDays(29)->toDateString(), 'to' => today()->toDateString()]) }}" class="btn btn-outline"><i class="fa-solid fa-calendar-days"></i> Last Month</a>
+</form>
 
 {{-- Letterhead (visible only when printing) --}}
 <div class="reg-letterhead-print letterhead">
-    <div class="hosp-name">{{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}</div>
+    <div class="hosp-name">{{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}</div>
     <div class="hosp-sub">{{ setting('clinic_address', '') }}</div>
     <div class="doc-title">OPD DAILY REGISTER</div>
     <div class="doc-meta">
-        Date: <strong>{{ \Carbon\Carbon::parse($date)->format('d F Y') }}</strong>
+        {{ $from === $to ? 'Date' : 'Period' }}: <strong>{{ \Carbon\Carbon::parse($from)->format('d F Y') }}{{ $from === $to ? '' : ' — '.\Carbon\Carbon::parse($to)->format('d F Y') }}</strong>
         @if($doctorId)
             &nbsp;|&nbsp; Doctor: <strong>Dr. {{ $doctors->firstWhere('id', $doctorId)?->first_name }} {{ $doctors->firstWhere('id', $doctorId)?->last_name }}</strong>
         @endif
@@ -94,6 +101,7 @@
 <table class="reg-table">
     <thead>
         <tr>
+            @if($from !== $to)<th style="width:7%">Date</th>@endif
             <th style="width:6%">Token</th>
             <th style="width:5%">Time</th>
             <th style="width:16%">Patient Name</th>
@@ -111,12 +119,13 @@
     <tbody>
     @forelse($tokens as $t)
     <tr class="{{ $t->priority === 'urgent' ? 'urgent-row' : '' }}">
+        @if($from !== $to)<td>{{ \Carbon\Carbon::parse($t->token_date)->format('d-m-y') }}</td>@endif
         <td class="token-cell">{{ $t->display }}</td>
         <td>{{ $t->created_at->format('h:i A') }}</td>
         <td><strong>{{ $t->patient->full_name }}</strong></td>
         <td style="font-size:10px;color:#555">{{ $t->patient->jhc_id }}</td>
         <td>{{ $t->patient->age }} / {{ substr($t->patient->gender, 0, 1) }}</td>
-        <td>{{ $t->doctor ? 'Dr. '.$t->doctor->first_name.' '.$t->doctor->last_name : '—' }}</td>
+        <td>{{ $t->doctor ? 'Dr. '.$t->doctor->first_name.' '.$t->doctor->last_name : '—' }}@if($t->department)<div style="font-size:11px;color:#555">{{ $t->department->name }}</div>@endif</td>
         <td>{{ $t->purpose ?: '—' }}</td>
         <td><span class="reg-badge {{ $t->priority === 'urgent' ? 'b-urgent' : 'b-normal' }}">{{ ucfirst($t->priority) }}</span></td>
         <td>
@@ -140,13 +149,13 @@
         <td style="font-size:10px">{{ $t->completed_at?->format('h:i A') ?? '—' }}</td>
     </tr>
     @empty
-    <tr><td colspan="12" style="text-align:center;padding:30px;color:#888">No OPD tokens for this date.</td></tr>
+    <tr><td colspan="{{ $from !== $to ? 13 : 12 }}" style="text-align:center;padding:30px;color:#888">No OPD tokens for this {{ $from === $to ? 'date' : 'period' }}.</td></tr>
     @endforelse
     </tbody>
     @if($tokens->isNotEmpty())
     <tfoot>
         <tr style="background:#f0f4f8;font-weight:700">
-            <td colspan="6" style="padding:6px 8px">Total: {{ $stats['total'] }} patients</td>
+            <td colspan="{{ $from !== $to ? 7 : 6 }}" style="padding:6px 8px">Total: {{ $stats['total'] }} patients</td>
             <td colspan="6" style="padding:6px 8px;text-align:right">Completed: {{ $stats['done'] }} &nbsp;|&nbsp; Skipped: {{ $stats['skipped'] }}</td>
         </tr>
     </tfoot>

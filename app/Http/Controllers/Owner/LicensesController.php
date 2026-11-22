@@ -213,7 +213,7 @@ INSTALLATION
 
 3. Set the following in your .env (values shown on the buyer detail page):
      MODULES_PUBLIC_KEY=<your buyer-specific public key>
-     MODULES_HEARTBEAT_URL=https://demo.example.com/specialitycare/api/license/heartbeat
+     MODULES_HEARTBEAT_URL=https://jhcpl.in/specialitycare/api/license/heartbeat
 
 4. Clear Laravel config cache and reload PHP-FPM:
      php artisan config:clear

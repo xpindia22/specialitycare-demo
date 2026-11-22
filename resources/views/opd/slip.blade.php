@@ -24,7 +24,7 @@
 <body onload="window.print()">
 <div class="slip">
   @if(setting('print_header_enabled','1') !== '0')
-  <div class="clinic-name">{{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}</div>
+  <div class="clinic-name">{{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}</div>
   <div class="clinic-sub">OPD Token Slip</div>
   @endif
 

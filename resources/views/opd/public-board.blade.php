@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="refresh" content="30">
-    <title>OPD Queue — Demo Clinic Pvt. Ltd.</title>
+    <title>OPD Queue — James Heart Care Pvt. Ltd.</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -313,8 +313,8 @@
     <div class="tv-logo">
         <div class="tv-logo-icon"><i class="fa-solid fa-heart-pulse"></i></div>
         <div class="tv-logo-text">
-            <div class="name">Demo Clinic Pvt. Ltd.</div>
-            <div class="sub">OPD Queue Display</div>
+            <div class="name">James Heart Care Pvt. Ltd.</div>
+            <div class="sub">@if($dept)<i class="fa-solid {{ $dept->icon ?: 'fa-hospital' }}"></i> {{ $dept->name }}@if($dept->room) &middot; {{ $dept->room }}@endif @else OPD Queue Display @endif</div>
         </div>
     </div>
     <div class="tv-header-right">
@@ -359,8 +359,9 @@
                 <div class="doctor-card-header">
                     <i class="fa-solid fa-stethoscope"></i>
                     <span class="doctor-name">Dr. {{ $dq['doctor']->first_name }} {{ $dq['doctor']->last_name }}</span>
-                    @if($dq['doctor']->specialization)
-                    <span style="font-size:0.85rem;color:var(--muted);margin-left:auto">{{ $dq['doctor']->specialization }}</span>
+                    @php $dqDept = $dept ?: $dq['doctor']->department; @endphp
+                    @if($dqDept || $dq['doctor']->specialization)
+                    <span style="font-size:0.85rem;color:var(--muted);margin-left:auto">{{ $dqDept?->name ?? $dq['doctor']->specialization }}@if($dqDept?->room) &middot; {{ $dqDept->room }}@endif</span>
                     @endif
                 </div>
 
@@ -413,7 +414,7 @@
 
 <!-- FOOTER -->
 <div class="tv-footer">
-    Demo Clinic Pvt. Ltd. &nbsp;·&nbsp; {{ setting('clinic_address', '') }}
+    James Heart Care Pvt. Ltd. &nbsp;·&nbsp; {{ setting('clinic_address', '') }}
     &nbsp;·&nbsp; Auto-refreshes every 30 seconds
 </div>
 

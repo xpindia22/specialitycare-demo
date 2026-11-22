@@ -44,6 +44,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // exclude it from CSRF.
         $middleware->validateCsrfTokens(except: [
             'api/license/heartbeat',
+            'webhooks/whatsapp/inbound',
+            'webhooks/whatsapp/inbound/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

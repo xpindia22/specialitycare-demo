@@ -62,9 +62,9 @@
     <div class="lh">
         <div class="lh-logo">JHC</div>
         <div class="lh-info">
-            <h1>Demo Clinic Pvt. Ltd.</h1>
+            <h1>James Heart Care Pvt. Ltd.</h1>
             <p>Multi-Specialty Hospital &amp; Research Centre</p>
-            <p>Contact: info@demo.example.com | Emergency: 108</p>
+            <p>Contact: info@jhcpl.in | Emergency: 108</p>
         </div>
         <div class="lh-right">
             <div class="form-title">{{ $typeLabel }}<br>Consent Form</div>
@@ -114,7 +114,7 @@
         <div class="para">
             I / We, <span class="fillable">{{ $consent->patient_or_guardian ?? '' }}</span>, being the patient /
             legally authorised representative of the above-named patient, hereby voluntarily consent to
-            admission in <strong>Demo Clinic Pvt. Ltd.</strong> and to such examinations, investigations,
+            admission in <strong>James Heart Care Pvt. Ltd.</strong> and to such examinations, investigations,
             medical or surgical treatment and nursing care as may be deemed necessary by the attending physician
             or surgeon.
         </div>
@@ -270,7 +270,7 @@
     <div class="footer">
         Printed: {{ now()->format('d M Y H:i') }} &nbsp;|&nbsp;
         IPD: {{ $admission->ipd_no }} &nbsp;|&nbsp;
-        Demo Clinic Pvt. Ltd. — Confidential Medical Record
+        James Heart Care Pvt. Ltd. — Confidential Medical Record
     </div>
     @endif
 

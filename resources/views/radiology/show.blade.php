@@ -3,6 +3,8 @@
 @section('page-title','Radiology Order')
 @section('content')
 
+@include('diagnostics._toolbar')
+
 <div class="page-header">
   <div class="page-header-left">
     <h1 class="mono">{{ $order->order_no }}</h1>

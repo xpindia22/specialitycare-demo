@@ -54,6 +54,9 @@ class WhatsAppService
      * @param array  $params       ordered body variables ({{1}}, {{2}}, …).
      * @param string $renderedBody human-readable text logged to the audit table
      *                             (and sent verbatim on the Twilio backend).
+     * @param array|null $document ['link' => public URL, 'filename' => name] for a
+     *                             template approved with a DOCUMENT header (Gupshup):
+     *                             the PDF arrives as an attachment in the chat.
      */
     public function sendTemplate(
         ?string $phone,
@@ -63,15 +66,18 @@ class WhatsAppService
         string $kind = 'manual',
         ?Patient $patient = null,
         ?int $sentBy = null,
+        ?array $document = null,
     ): array {
-        return $this->dispatch($phone, $renderedBody, $kind, $patient, $sentBy, $templateKey, $params);
+        return $this->dispatch($phone, $renderedBody, $kind, $patient, $sentBy, $templateKey, $params, $document);
     }
 
-    /** Convenience wrapper: free-form send to a Patient's primary phone.
-     *  Auto-CCs the owner with a verbatim copy of the body. */
-    public function sendToPatient(Patient $patient, string $body, string $kind = 'manual', ?int $sentBy = null): array
+    /** Convenience wrapper: free-form send to a Patient's primary phone, or to
+     *  $phone instead when given (e.g. staff overrode it in a "send to" field).
+     *  Auto-CCs the owner with a verbatim copy of the body either way. */
+    public function sendToPatient(Patient $patient, string $body, string $kind = 'manual', ?int $sentBy = null, ?string $phone = null): array
     {
-        $result = $this->send($patient->phone ?? $patient->alt_phone, $body, $kind, $patient, $sentBy);
+        $target = ($phone !== null && trim($phone) !== '') ? trim($phone) : ($patient->phone ?? $patient->alt_phone);
+        $result = $this->send($target, $body, $kind, $patient, $sentBy);
         $this->ccOwnerOfPatientMessage($patient, $body, $kind);
         return $result;
     }
@@ -83,10 +89,11 @@ class WhatsAppService
      * Auto-CCs the owner with the rendered body so they see what the patient
      * received.
      */
-    public function sendTemplateToPatient(Patient $patient, string $templateKey, array $params, string $renderedBody, string $kind = 'manual', ?int $sentBy = null): array
+    public function sendTemplateToPatient(Patient $patient, string $templateKey, array $params, string $renderedBody, string $kind = 'manual', ?int $sentBy = null, ?string $phone = null, ?array $document = null): array
     {
-        $result = $this->sendTemplate($patient->phone ?? $patient->alt_phone, $templateKey, $params, $renderedBody, $kind, $patient, $sentBy);
-        $this->ccOwnerOfPatientMessage($patient, $renderedBody, $kind);
+        $target = ($phone !== null && trim($phone) !== '') ? trim($phone) : ($patient->phone ?? $patient->alt_phone);
+        $result = $this->sendTemplate($target, $templateKey, $params, $renderedBody, $kind, $patient, $sentBy, $document);
+        $this->ccOwnerOfPatientMessage($patient, $renderedBody, $kind, $templateKey, $params, $document);
         return $result;
     }
 
@@ -96,7 +103,7 @@ class WhatsAppService
      * No-ops silently if owner_phone is unset or equals the patient's phone
      * (avoids double-send during testing).
      */
-    private function ccOwnerOfPatientMessage(Patient $patient, string $body, string $originalKind): void
+    private function ccOwnerOfPatientMessage(Patient $patient, string $body, string $originalKind, ?string $templateKey = null, array $params = [], ?array $document = null): void
     {
         $owner = (string) config('services.whatsapp.owner_phone');
         if ($owner === '') return;
@@ -110,6 +117,21 @@ class WhatsAppService
         $label = $patient->full_name ?: 'patient';
         if (!empty($patient->jhc_id)) $label .= " ({$patient->jhc_id})";
         $ccBody = "📋 CC — sent to {$label}\n\n" . $body;
+
+        // Reliable path: when the patient message used an approved template, send
+        // the owner the SAME template with the same params. Template messages are
+        // business-initiated and ignore the 24h free-form window, so the owner
+        // ALWAYS receives the copy — no need to message the clinic number daily.
+        // The owner sees the patient-formatted template; the audit log keeps the
+        // human-readable "CC — sent to <patient>" body.
+        if ($templateKey !== null && $this->hasTemplate($templateKey)) {
+            $this->sendTemplate($owner, $templateKey, $params, $ccBody, "cc_{$originalKind}", $patient, null, $document);
+            return;
+        }
+
+        // Fallback for free-form patient messages (e.g. manual chats): there is no
+        // template, so this copy is free-form and only lands inside the owner's
+        // 24h window.
         $this->send($owner, $ccBody, "cc_{$originalKind}", $patient);
     }
 
@@ -186,7 +208,15 @@ class WhatsAppService
         ?int $sentBy,
         ?string $templateKey,
         array $params,
+        ?array $document = null,
     ): array {
+        // Per-host env kill switch (default ON). WHATSAPP_ENABLED=false on a
+        // dev/home box stops ALL outbound WhatsApp there so test bills/appts
+        // never reach real patients. Env isn't synced, so nvme stays unaffected.
+        if (!config('services.whatsapp.enabled', true)) {
+            return ['ok' => false, 'skipped' => 'wa_disabled_env'];
+        }
+
         // Master kill switch — toggled from /admin/notifications/whatsapp.
         // Overrides every per-event preference. Set when the owner wants to
         // pause ALL outbound WhatsApp (template + free-form, patient + owner).
@@ -238,14 +268,14 @@ class WhatsAppService
             'to_phone'   => $to,
             'kind'       => $kind,
             'provider'   => $provider,
-            'body'       => $body,
+            'body'       => $body . ($document ? "\n[PDF attached: {$document['filename']}]" : ''),
             'status'     => 'queued',
             'sent_by'    => $sentBy,
         ]);
 
         return match ($provider) {
             'meta'    => $this->sendViaMeta($log, $to, $body, $templateKey, $params),
-            'gupshup' => $this->sendViaGupshup($log, $to, $body, $templateKey, $params),
+            'gupshup' => $this->sendViaGupshup($log, $to, $body, $templateKey, $params, $document),
             default   => $this->sendViaTwilio($log, $to, $body),
         };
     }
@@ -393,8 +423,9 @@ class WhatsAppService
     /**
      * @param ?string $templateKey null => free-form session text; otherwise
      *                             resolves to a Gupshup template *ID* + $params.
+     * @param ?array  $document    ['link','filename'] header media for a DOCUMENT template.
      */
-    private function sendViaGupshup(WhatsAppMessage $log, string $to, string $body, ?string $templateKey, array $params): array
+    private function sendViaGupshup(WhatsAppMessage $log, string $to, string $body, ?string $templateKey, array $params, ?array $document = null): array
     {
         $apiKey  = (string) config('services.whatsapp.gupshup.api_key');
         $source  = ltrim((string) config('services.whatsapp.gupshup.source'), '+');
@@ -412,6 +443,11 @@ class WhatsAppService
                     'params' => array_map(fn ($p) => (string) $p, array_values($params)),
                 ]),
             ];
+            if ($document) {
+                $form['message'] = json_encode(['type' => 'document', 'document' => [
+                    'link' => $document['link'], 'filename' => $document['filename'],
+                ]]);
+            }
         } else {
             $endpoint = 'https://api.gupshup.io/wa/api/v1/msg';
             $form = [

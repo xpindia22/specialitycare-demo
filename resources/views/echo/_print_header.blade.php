@@ -23,7 +23,7 @@
                 @else
                     <div class="rpt-heart-icon">&#9829;</div>
                 @endif
-                <div class="rpt-clinic-name">{{ setting('clinic_name','Demo Clinic Pvt. Ltd.') }}</div>
+                <div class="rpt-clinic-name">{{ setting('clinic_name','James Heart Care Pvt. Ltd.') }}</div>
                 @if(setting('clinic_tagline'))<div class="rpt-tagline">{{ setting('clinic_tagline') }}</div>@endif
             </td>
             <td width="33%" valign="top" align="right" style="padding-right:14px">

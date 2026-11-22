@@ -40,20 +40,27 @@ class ReportsController extends Controller
     public function trialBalance(Request $request, VoucherService $svc)
     {
         $upto = $request->query('upto') ? Carbon::parse($request->query('upto')) : Carbon::today();
+        $boD  = $svc->booksOpeningDate();
 
         $rows = DB::table('account_ledgers as l')
             ->join('account_groups as g', 'g.id', '=', 'l.group_id')
             ->leftJoin('voucher_entries as ve', 've.ledger_id', '=', 'l.id')
-            ->leftJoin('vouchers as v', function ($j) use ($upto) {
+            ->leftJoin('vouchers as v', function ($j) use ($upto, $boD) {
                 $j->on('v.id', '=', 've.voucher_id')->where('v.status', 'Posted')->where('v.voucher_date', '<=', $upto);
+                if ($boD) {
+                    $j->where('v.voucher_date', '>=', $boD);
+                }
             })
             ->select(
                 'l.id', 'l.code', 'l.name',
                 'l.opening_balance', 'l.opening_balance_dr_cr',
                 'g.id as group_id', 'g.name as group_name', 'g.code as group_code',
                 'g.nature', 'g.parent_id as group_parent_id', 'g.sort_order',
-                DB::raw('COALESCE(SUM(ve.dr_amount), 0) as posted_dr'),
-                DB::raw('COALESCE(SUM(ve.cr_amount), 0) as posted_cr')
+                // Only count entries whose voucher matched the join (status + date
+                // window + books-opening floor). A bare SUM(ve.*) would include
+                // every entry regardless, because ve survives the chained left join.
+                DB::raw('COALESCE(SUM(CASE WHEN v.id IS NOT NULL THEN ve.dr_amount ELSE 0 END), 0) as posted_dr'),
+                DB::raw('COALESCE(SUM(CASE WHEN v.id IS NOT NULL THEN ve.cr_amount ELSE 0 END), 0) as posted_cr')
             )
             ->groupBy('l.id', 'l.code', 'l.name', 'l.opening_balance', 'l.opening_balance_dr_cr',
                      'g.id', 'g.name', 'g.code', 'g.nature', 'g.parent_id', 'g.sort_order')
@@ -72,7 +79,7 @@ class ReportsController extends Controller
 
         $grouped = $rows->groupBy('group_name');
 
-        return view('accounts.reports.trial-balance', compact('grouped', 'totals', 'upto'));
+        return view('accounts.reports.trial-balance', compact('grouped', 'totals', 'upto', 'boD'));
     }
 
     public function profitLoss(Request $request, VoucherService $svc)
@@ -81,6 +88,13 @@ class ReportsController extends Controller
         [$fyStart, $fyEnd] = $svc->fyRange($fyYear);
         $from = $request->query('from') ? Carbon::parse($request->query('from')) : $fyStart;
         $to   = $request->query('to')   ? Carbon::parse($request->query('to'))   : Carbon::today();
+
+        // Never reach before the books opening date — pre-cutover income/expense
+        // lives in the opening balances, not in the current-period P&L.
+        $boD = $svc->booksOpeningDate();
+        if ($boD && $boD->gt($from)) {
+            $from = $boD;
+        }
 
         // Sum each ledger's net (Cr − Dr for Income, Dr − Cr for Expenses) within period.
         $ledgerRows = DB::table('voucher_entries as ve')
@@ -126,7 +140,7 @@ class ReportsController extends Controller
 
         return view('accounts.reports.profit-loss', compact(
             'income', 'expense', 'grossProfit', 'netProfit', 'totalIncome', 'totalExpense',
-            'from', 'to', 'fyYear'
+            'from', 'to', 'fyYear', 'boD'
         ));
     }
 
@@ -135,19 +149,27 @@ class ReportsController extends Controller
         $upto = $request->query('upto') ? Carbon::parse($request->query('upto')) : Carbon::today();
         $fyYear = $svc->fyYear($upto);
         [$fyStart, $fyEnd] = $svc->fyRange($fyYear);
+        $boD = $svc->booksOpeningDate();
 
         // For each ledger: opening (signed) + Σdr - Σcr up to `upto` => closing.
+        // The Σ ignores anything before the books opening date — that position is
+        // already in the ledger's opening_balance (migrated Balance Sheet).
         $rows = DB::table('account_ledgers as l')
             ->join('account_groups as g', 'g.id', '=', 'l.group_id')
             ->leftJoin('voucher_entries as ve', 've.ledger_id', '=', 'l.id')
-            ->leftJoin('vouchers as v', function ($j) use ($upto) {
+            ->leftJoin('vouchers as v', function ($j) use ($upto, $boD) {
                 $j->on('v.id', '=', 've.voucher_id')->where('v.status', 'Posted')->where('v.voucher_date', '<=', $upto);
+                if ($boD) {
+                    $j->where('v.voucher_date', '>=', $boD);
+                }
             })
             ->select(
                 'l.id', 'l.name as ledger_name', 'l.opening_balance', 'l.opening_balance_dr_cr',
                 'g.id as group_id', 'g.name as group_name', 'g.code as group_code', 'g.nature', 'g.sort_order',
-                DB::raw('COALESCE(SUM(ve.dr_amount), 0) as dr'),
-                DB::raw('COALESCE(SUM(ve.cr_amount), 0) as cr')
+                // Conditional sum — count only entries whose voucher passed the join
+                // (status + voucher_date <= upto + books-opening floor). See trialBalance().
+                DB::raw('COALESCE(SUM(CASE WHEN v.id IS NOT NULL THEN ve.dr_amount ELSE 0 END), 0) as dr'),
+                DB::raw('COALESCE(SUM(CASE WHEN v.id IS NOT NULL THEN ve.cr_amount ELSE 0 END), 0) as cr')
             )
             ->groupBy('l.id', 'l.name', 'l.opening_balance', 'l.opening_balance_dr_cr',
                      'g.id', 'g.name', 'g.code', 'g.nature', 'g.sort_order')
@@ -175,12 +197,15 @@ class ReportsController extends Controller
         }
 
         // Net profit/loss to date — sum Income.cr − Income.dr − (Expense.dr − Expense.cr) within FY.
+        // Start no earlier than the books opening date (pre-cutover P&L is already
+        // folded into opening Reserves/Capital).
+        $plFrom = ($boD && $boD->gt($fyStart)) ? $boD : $fyStart;
         $pl = DB::table('voucher_entries as ve')
             ->join('vouchers as v', 'v.id', '=', 've.voucher_id')
             ->join('account_ledgers as l', 'l.id', '=', 've.ledger_id')
             ->join('account_groups as g', 'g.id', '=', 'l.group_id')
             ->where('v.status', 'Posted')
-            ->whereBetween('v.voucher_date', [$fyStart, $upto])
+            ->whereBetween('v.voucher_date', [$plFrom, $upto])
             ->whereIn('g.nature', ['Income', 'Expenses'])
             ->select('g.nature', DB::raw('SUM(ve.cr_amount - ve.dr_amount) as net'))
             ->groupBy('g.nature')
@@ -197,7 +222,7 @@ class ReportsController extends Controller
         $difference = round($assetsTotal - $liabTotal, 2);
 
         return view('accounts.reports.balance-sheet', compact(
-            'assets', 'liabilities', 'assetsTotal', 'liabTotal', 'difference', 'netProfit', 'upto', 'fyYear'
+            'assets', 'liabilities', 'assetsTotal', 'liabTotal', 'difference', 'netProfit', 'upto', 'fyYear', 'boD'
         ));
     }
 }

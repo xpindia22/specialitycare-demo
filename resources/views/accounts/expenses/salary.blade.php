@@ -3,6 +3,8 @@
 @section('page-title','Pay Salary')
 @section('content')
 
+@include('accounts._toolbar')
+
 <div class="page-header">
     <div class="page-header-left">
         <a href="{{ route('accounts.index') }}" class="text-small"><i class="fa-solid fa-arrow-left"></i> Accounts</a>
@@ -17,7 +19,7 @@
 
 @if($payees->isEmpty())
 <div class="card"><div class="card-body" style="text-align:center;padding:24px">
-    <p>No active payees yet. <a href="{{ route('accounts.payees.create') }}">Add Sample Physician or your maid first</a>, then come back to pay them.</p>
+    <p>No active payees yet. <a href="{{ route('accounts.payees.create') }}">Add Anushika or your maid first</a>, then come back to pay them.</p>
 </div></div>
 @else
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">

@@ -21,7 +21,7 @@
 <body onload="window.print()">
 @if(setting('print_header_enabled','1') !== '0')
 <div class="header">
-  <div class="clinic-name">{{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}</div>
+  <div class="clinic-name">{{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}</div>
 </div>
 @endif
 <div class="doc-title">Operation Theater Register</div>
@@ -63,7 +63,7 @@
 <div style="margin-top:12px;font-weight:700">Total Operations: {{ $operations->count() }}</div>
 
 @if(setting('print_footer_enabled','1') !== '0')
-<div class="footer">Printed on {{ now()->format('d M Y, h:i A') }} | {{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}</div>
+<div class="footer">Printed on {{ now()->format('d M Y, h:i A') }} | {{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}</div>
 @endif
 </body>
 </html>

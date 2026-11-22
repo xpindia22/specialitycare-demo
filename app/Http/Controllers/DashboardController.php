@@ -55,7 +55,7 @@ class DashboardController extends Controller
                 'pending_bills'        => DB::table('bills')->whereIn('status', ['Unpaid','Partial'])->count(),
                 'pending_dues_amount'  => (float) DB::table('bills')->whereIn('status', ['Unpaid','Partial'])->where('bill_no','not like','OE/%')->sum('due_amount'),
                 'today_patients'       => DB::table('patients')->whereDate('created_at', today())->count(),
-                'today_encounters'     => DB::table('encounters')->whereDate('encounter_date', today())->count(),
+                'today_encounters'     => DB::table('encounters')->whereNull('deleted_at')->whereDate('encounter_date', today())->count(),
                 'pending_labs'         => DB::table('lab_orders')->whereIn('status',['Ordered','Collected','Processing'])->count(),
                 'low_stock'            => \App\Models\Medicine::where('is_active', true)->withSum(['stocks as live_qty' => function ($q) { $q->where('is_active', true)->where('quantity', '>', 0)->where(function ($e) { $e->whereNull('expiry_date')->orWhere('expiry_date', '>=', today()); }); }], 'quantity')->get()->filter(fn ($m) => (int) $m->live_qty > 0 && (int) $m->live_qty <= (int) $m->reorder_level)->count(),
             ];
@@ -95,7 +95,7 @@ class DashboardController extends Controller
                 // Other
                 'total_patients'       => DB::table('patients')->count(),
                 'today_patients'       => DB::table('patients')->whereDate('created_at', today())->count(),
-                'today_encounters'     => DB::table('encounters')->whereDate('encounter_date', today())->count(),
+                'today_encounters'     => DB::table('encounters')->whereNull('deleted_at')->whereDate('encounter_date', today())->count(),
                 'active_doctors'       => DB::table('doctors')->where('is_active', true)->count(),
                 'pending_labs'         => DB::table('lab_orders')->whereIn('status', ['Ordered','Collected','Processing'])->count(),
                 'low_stock'            => DB::table('pharmacy_stock')->where('is_active', true)->whereColumn('quantity','<=','min_stock_level')->where('quantity','>',0)->count(),
@@ -105,6 +105,7 @@ class DashboardController extends Controller
 
             $todayAppointments = Appointment::with('patient','doctor')
                 ->whereDate('appointment_date', today())
+                ->withoutDeletedVisits()
                 ->orderBy('appointment_time')
                 ->limit(10)
                 ->get();
@@ -189,6 +190,8 @@ class DashboardController extends Controller
             // Prescriptions expiring within 7 days (active, not yet dispensed)
             $expiringRx = DB::table('prescription_items')
                 ->join('prescriptions', 'prescriptions.id', '=', 'prescription_items.prescription_id')
+                ->leftJoin('encounters', 'encounters.id', '=', 'prescriptions.encounter_id')
+                ->whereNull('encounters.deleted_at')   // skip deleted visits
                 ->join('patients',      'patients.id',      '=', 'prescriptions.patient_id')
                 ->join('medicines',     'medicines.id',     '=', 'prescription_items.medicine_id')
                 ->whereRaw('DATE_ADD(DATE(prescriptions.prescribed_date), INTERVAL prescription_items.duration_days DAY) BETWEEN ? AND ?',

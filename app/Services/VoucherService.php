@@ -131,6 +131,28 @@ class VoucherService
         return [$start, $end];
     }
 
+    /**
+     * Books opening (cutover) date. Reports ignore vouchers dated BEFORE this,
+     * because the position up to the cutover is captured by ledger opening
+     * balances (entered from the migrated Balance Sheet). Without this floor,
+     * pre-cutover auto-posted Sales/Receipts (in this DB since 2023) would be
+     * double-counted on top of the opening balances.
+     *
+     * Returns null when unset → reports behave exactly as before (no floor).
+     */
+    public function booksOpeningDate(): ?Carbon
+    {
+        $raw = setting('accounts_books_opening_date');
+        if (!$raw) {
+            return null;
+        }
+        try {
+            return Carbon::parse($raw)->startOfDay();
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
     // ── internals ─────────────────────────────────────────────────────────
 
     private function resolveType(string|VoucherType $type): VoucherType

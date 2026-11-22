@@ -30,6 +30,7 @@ class SendReviewRequestWhatsApp extends Command
         $limit  = $this->option('limit') !== null ? (int) $this->option('limit') : null;
         $dryRun = (bool) $this->option('dry-run');
         $clinic = setting('clinic_name', config('app.name', 'Speciality Care'));
+        $clinicSig = clinic_signature();
         $date   = now()->subDays(2)->toDateString();
 
         $encounters = Encounter::with('patient')
@@ -48,7 +49,7 @@ class SendReviewRequestWhatsApp extends Command
             if ($already) { $skipped++; continue; }
 
             $name = $e->patient->full_name ?: 'there';
-            $body = "Hi {$name},\n\nThank you for choosing {$clinic}. Your feedback helps us serve you better — could you share a Google review of your visit? Regards, {$clinic} team.\n[ref:{$key}]";
+            $body = "Hi {$name},\n\nThank you for choosing {$clinicSig}. Your feedback helps us serve you better — could you share a Google review of your visit? Regards, {$clinicSig} team.\n[ref:{$key}]";
 
             if ($dryRun) {
                 $sent++;
@@ -57,7 +58,7 @@ class SendReviewRequestWhatsApp extends Command
             }
 
             // Template review_request: {{1}} name, {{2}} clinic.
-            $r = $wa->sendTemplateToPatient($e->patient, 'review_request', [$name, $clinic], $body, 'review_request');
+            $r = $wa->sendTemplateToPatient($e->patient, 'review_request', [$name, $clinicSig], $body, 'review_request');
             if ($r['ok'] ?? false) { $sent++; }
             else { $skipped++; }
         }

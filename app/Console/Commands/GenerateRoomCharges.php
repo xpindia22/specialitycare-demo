@@ -3,7 +3,7 @@ namespace App\Console\Commands;
 
 use App\Models\Admission;
 use App\Models\IpdCharge;
-use App\Models\ServiceCharge;
+use App\Services\RoomRent;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -12,16 +12,6 @@ class GenerateRoomCharges extends Command
     protected $signature   = 'ipd:room-charges {date? : Date in Y-m-d format (default: today)}';
     protected $description = 'Generate daily room rent charges for all currently admitted patients';
 
-    // Map ward type → ServiceCharge name pattern
-    const WARD_CHARGE_MAP = [
-        'general'     => 'General Ward Room Rent',
-        'semi_private'=> 'Semi-Private Room Rent',
-        'private'     => 'Private Room Rent',
-        'icu'         => 'ICU Room Rent',
-        'hdu'         => 'HDU Room Rent',
-        'emergency'   => 'Emergency Ward Room Rent',
-    ];
-
     public function handle(): int
     {
         $date = $this->argument('date') ? now()->parse($this->argument('date')) : today();
@@ -29,7 +19,7 @@ class GenerateRoomCharges extends Command
 
         $this->info("Generating room charges for {$dateStr}…");
 
-        $rateCache = [];
+        $rent = new RoomRent();
         $created = 0;
         $skipped = 0;
 
@@ -47,21 +37,16 @@ class GenerateRoomCharges extends Command
 
             if ($exists) { $skipped++; continue; }
 
-            $wardType = $admission->ward->type;
-            if (!isset($rateCache[$wardType])) {
-                $chargeName = self::WARD_CHARGE_MAP[$wardType] ?? null;
-                $rateCache[$wardType] = $chargeName
-                    ? ServiceCharge::where('name', $chargeName)->where('is_active', true)->value('price') ?? 0
-                    : 0;
-            }
-            $price = $rateCache[$wardType];
-            if ($price <= 0) { $skipped++; continue; }
+            // ward the patient was in that day; the higher rate on a transfer day
+            $charge = $rent->forDate($admission, $date);
+            if (!$charge) { $skipped++; continue; }
+            $price = $charge['rate'];
 
             IpdCharge::create([
                 'admission_id' => $admission->id,
                 'charge_date'  => $dateStr,
                 'category'     => 'room_rent',
-                'description'  => $admission->ward->name . ' — Room Rent',
+                'description'  => $charge['description'],
                 'unit_price'   => $price,
                 'quantity'     => 1,
                 'amount'       => $price,

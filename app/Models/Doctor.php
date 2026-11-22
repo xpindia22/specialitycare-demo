@@ -15,6 +15,7 @@ class Doctor extends Model
         'qualification', 'registration_no', 'experience_years', 'photo',
         'signature', 'consultation_fee', 'bio', 'available_days',
         'start_time', 'end_time', 'slot_duration', 'is_active', 'auto_present',
+        'languages', 'show_online',
     ];
 
     protected $casts = [
@@ -22,6 +23,7 @@ class Doctor extends Model
         'available_days' => 'array',
         'is_active' => 'boolean',
         'auto_present' => 'boolean',
+        'show_online' => 'boolean',
         'consultation_fee' => 'decimal:2',
     ];
 
@@ -34,6 +36,16 @@ class Doctor extends Model
 
     public function user() { return $this->belongsTo(User::class); }
     public function department() { return $this->belongsTo(Department::class); }
+    /** Additional departments (the primary one is department_id) */
+    public function departments() { return $this->belongsToMany(Department::class); }
+    public function schedules() { return $this->hasMany(DoctorSchedule::class)->orderBy('day_of_week')->orderBy('start_time'); }
+    public function leaves() { return $this->hasMany(DoctorLeave::class)->orderByDesc('from_date'); }
+
+    /** Primary + additional department ids */
+    public function departmentIds(): array
+    {
+        return array_values(array_unique(array_filter(array_merge([$this->department_id], $this->departments->pluck('id')->all()))));
+    }
     public function appointments() { return $this->hasMany(Appointment::class); }
     public function encounters() { return $this->hasMany(Encounter::class); }
 

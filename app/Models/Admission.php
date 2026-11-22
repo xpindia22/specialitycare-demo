@@ -10,7 +10,7 @@ class Admission extends Model
         'ipd_no', 'patient_id', 'bed_id', 'ward_id', 'admitting_doctor_id',
         'admission_type', 'admission_date', 'provisional_diagnosis',
         'referred_by', 'referral_source_id', 'notes', 'status', 'discharge_date',
-        'discharge_condition', 'discharge_notes', 'discharge_summary', 'created_by',
+        'discharge_condition', 'discharge_notes', 'discharge_summary', 'discharge_override', 'created_by',
         'is_mlc', 'mlc_no', 'mlc_police_station', 'mlc_notes',
     ];
 
@@ -62,6 +62,9 @@ class Admission extends Model
     public function radiologyOrders() { return $this->hasMany(RadiologyOrder::class)->orderByDesc('created_at'); }
     public function operations()      { return $this->hasMany(Operation::class)->orderByDesc('operation_date'); }
     public function handoverNotes()   { return $this->hasMany(\App\Models\HandoverNote::class)->latest(); }
+    public function bedTransfers()    { return $this->hasMany(BedTransfer::class)->orderBy('transferred_at')->orderBy('id'); }
+    public function icuInfusions()    { return $this->hasMany(IcuInfusion::class)->orderBy('started_at'); }
+    public function latestVitals()    { return $this->hasOne(IpdVitals::class)->latestOfMany('recorded_at'); }
     public function preauths()        { return $this->hasMany(\App\Models\InsurancePreauth::class)->latest(); }
 
     public function getTotalChargesAttribute(): float {

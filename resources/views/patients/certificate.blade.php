@@ -87,7 +87,7 @@
 <div class="cert">
   @if(setting('print_header_enabled','1') !== '0')
   <div class="cert-header">
-    <div class="clinic-name">{{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}</div>
+    <div class="clinic-name">{{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}</div>
     <div class="clinic-sub">{{ setting('clinic_address', '') }}</div>
   </div>
   @endif
@@ -123,7 +123,7 @@
 
   @if(setting('print_footer_enabled','1') !== '0')
   <div class="cert-note">
-    {{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }} — Valid only with official seal
+    {{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }} — Valid only with official seal
   </div>
   @endif
 </div>

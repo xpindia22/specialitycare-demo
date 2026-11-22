@@ -5,7 +5,9 @@
 
 <div class="page-header">
     <div class="page-header-left"><h1>Encounter Templates</h1></div>
-    <a href="{{ route('encounter-templates.create') }}" class="btn btn-primary"><i class="fa-solid fa-plus"></i> New Template</a>
+    @include('templates._toolbar', ['inline'=>true, 'extra' => [
+        ['url'=>route('encounter-templates.create'), 'icon'=>'fa-plus', 'label'=>'New Template', 'bg'=>'#047857'],
+    ]])
 </div>
 
 @if(session('success'))

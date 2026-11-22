@@ -252,8 +252,95 @@ class ReportsController extends Controller
             })->sortByDesc(fn($d) => $d->opd_revenue + $d->ipd_revenue)->values();
         }
 
+        // ── Revenue breakdown tabs (lab / pharmacy / consultation / services) ──
+        $breakdown = [];
+        if ($tab === 'lab-revenue') {
+            // Same rules as labDaily(): order totals incl. panels, cancelled excluded;
+            // profit = test lines' (snapshot or current) + each panel once per order.
+            $orders = DB::table('lab_orders as o')
+                ->leftJoin('patients as pt', 'pt.id', '=', 'o.patient_id')
+                ->whereBetween(DB::raw('DATE(o.ordered_date)'), [$fromDate, $toDate])
+                ->where('o.status', '!=', 'Cancelled')
+                ->when($doctorId, fn ($q) => $q->where('o.doctor_id', $doctorId))
+                ->orderByDesc('o.ordered_date')->orderByDesc('o.id')
+                ->get(['o.id', 'o.order_no', 'o.ordered_date', 'o.status', 'o.total_amount', 'o.discount',
+                       DB::raw("CONCAT(pt.first_name,' ',pt.last_name) as patient"), 'pt.jhc_id']);
+            $ids = $orders->pluck('id');
+            $testProfit = DB::table('lab_order_items as i')->leftJoin('lab_tests as t', 't.id', '=', 'i.lab_test_id')
+                ->whereIn('i.lab_order_id', $ids)->whereNull('i.lab_panel_id')
+                ->groupBy('i.lab_order_id')->selectRaw('i.lab_order_id, SUM(COALESCE(i.profit, t.profit, 0)) p')->pluck('p', 'lab_order_id');
+            $panelProfit = DB::query()->fromSub(
+                    DB::table('lab_order_items')->whereIn('lab_order_id', $ids)->whereNotNull('lab_panel_id')
+                        ->groupBy('lab_order_id', 'lab_panel_id')->selectRaw('lab_order_id, lab_panel_id, MAX(profit) snap'), 'g')
+                ->leftJoin('lab_panels as p', 'p.id', '=', 'g.lab_panel_id')
+                ->groupBy('g.lab_order_id')->selectRaw('g.lab_order_id, SUM(COALESCE(g.snap, p.profit, 0)) p')->pluck('p', 'lab_order_id');
+            $testNames = DB::table('lab_order_items as i')->join('lab_tests as t', 't.id', '=', 'i.lab_test_id')
+                ->whereIn('i.lab_order_id', $ids)->whereNull('i.lab_panel_id')
+                ->groupBy('i.lab_order_id')->selectRaw("i.lab_order_id, GROUP_CONCAT(t.name ORDER BY t.name SEPARATOR ', ') n")->pluck('n', 'lab_order_id');
+            $panelNames = DB::table('lab_order_items as i')->join('lab_panels as p', 'p.id', '=', 'i.lab_panel_id')
+                ->whereIn('i.lab_order_id', $ids)
+                ->groupBy('i.lab_order_id')->selectRaw("i.lab_order_id, GROUP_CONCAT(DISTINCT p.name ORDER BY p.name SEPARATOR ', ') n")->pluck('n', 'lab_order_id');
+            foreach ($orders as $o) {
+                $o->profit = (float) ($testProfit[$o->id] ?? 0) + (float) ($panelProfit[$o->id] ?? 0);
+                $o->panels = $panelNames[$o->id] ?? null;
+                $o->tests  = $testNames[$o->id] ?? null;
+            }
+            $breakdown = ['rows' => $orders, 'revenue' => (float) $orders->sum('total_amount'), 'profit' => (float) $orders->sum('profit')];
+        }
+
+        if ($tab === 'pharmacy-revenue') {
+            // Same pricing rule as pharmacyDaily() / the accounts' pharmacy sales voucher.
+            $markup = 1 + (float) (setting('accounts_pharmacy_sale_markup_pct') ?? 0) / 100;
+            $lines = DB::table('stock_transactions as t')
+                ->leftJoin('medicines as m', 'm.id', '=', 't.medicine_id')
+                ->leftJoin('pharmacy_stock as s', 's.id', '=', 't.pharmacy_stock_id')
+                ->leftJoin('prescriptions as rx', 'rx.id', '=', 't.prescription_id')
+                ->leftJoin('patients as pt', 'pt.id', '=', 'rx.patient_id')
+                ->where('t.type', 'dispensed')->where('t.quantity', '>', 0)
+                ->whereBetween(DB::raw('DATE(t.created_at)'), [$fromDate, $toDate])
+                ->when($doctorId, fn ($q) => $q->where('rx.doctor_id', $doctorId))
+                ->orderByDesc('t.created_at')
+                ->get(['t.id', 't.created_at', 't.quantity', 't.batch_number', 't.reference', 'm.name as medicine', 'm.unit_price', 's.unit_cost',
+                       DB::raw("CONCAT(pt.first_name,' ',pt.last_name) as patient"), 'pt.jhc_id']);
+            foreach ($lines as $l) {
+                $q = (float) $l->quantity;
+                $l->sale   = $l->unit_price > 0 ? $q * $l->unit_price : ($l->unit_cost > 0 ? $q * $l->unit_cost * $markup : 0);
+                $l->cost   = $l->unit_cost > 0 ? $q * $l->unit_cost : null;
+                $l->profit = ($l->sale > 0 && $l->cost !== null) ? $l->sale - $l->cost : null;   // null = can't be priced
+            }
+            $breakdown = ['rows' => $lines, 'sale' => (float) $lines->sum('sale'), 'cost' => (float) $lines->whereNotNull('profit')->sum('cost'),
+                          'profit' => (float) $lines->sum('profit'), 'unpriced' => $lines->whereNull('profit')->count()];
+        }
+
+        if (in_array($tab, ['consultation-revenue', 'services-revenue'], true)) {
+            $category = $request->get('category');
+            $items = DB::table('bill_items as i')
+                ->join('bills as b', 'b.id', '=', 'i.bill_id')
+                ->leftJoin('patients as pt', 'pt.id', '=', 'b.patient_id')
+                ->leftJoin('encounters as e', 'e.id', '=', 'b.encounter_id')
+                ->leftJoin('doctors as d', 'd.id', '=', 'e.doctor_id')
+                ->whereBetween('b.bill_date', [$fromDate, $toDate])
+                ->where('b.status', '!=', 'Unpaid')
+                ->when($tab === 'consultation-revenue', fn ($q) => $q->where('i.item_type', 'Consultation'))
+                ->when($tab === 'services-revenue', fn ($q) => $q->where('i.item_type', '!=', 'Consultation')
+                    ->when($category, fn ($q2) => $q2->where('i.item_type', $category)))
+                ->when($doctorId, fn ($q) => $q->where('e.doctor_id', $doctorId))
+                ->orderByDesc('b.bill_date')->orderByDesc('b.id')
+                ->get(['i.id', 'i.item_type', 'i.item_name', 'i.quantity', 'i.unit_price', 'i.total', 'b.id as bill_id', 'b.bill_no', 'b.bill_date',
+                       DB::raw("CONCAT(pt.first_name,' ',pt.last_name) as patient"), 'pt.jhc_id',
+                       DB::raw("CONCAT(d.first_name,' ',d.last_name) as doctor")]);
+            $breakdown = [
+                'rows'     => $items,
+                'total'    => (float) $items->sum('total'),
+                'byDoctor' => $items->groupBy(fn ($r) => $r->doctor ?: '—')->map(fn ($g) => ['count' => $g->count(), 'total' => (float) $g->sum('total')])->sortByDesc('total'),
+                'byType'   => $items->groupBy('item_type')->map(fn ($g) => ['count' => $g->count(), 'total' => (float) $g->sum('total')])->sortByDesc('total'),
+                'category' => $category,
+                'types'    => DB::table('bill_items')->where('item_type', '!=', 'Consultation')->distinct()->orderBy('item_type')->pluck('item_type'),
+            ];
+        }
+
         return view('reports.index', compact(
-            'tab','fromDate','toDate','wardId','doctorId',
+            'tab','fromDate','toDate','wardId','doctorId','breakdown',
             'wards','doctors',
             'admissionsReport','revenueReport','revenueSummary','dischargeReport',
             'opdReport','opdByDoctor','opdByDay',
@@ -403,7 +490,7 @@ class ReportsController extends Controller
 
             // Calculate incentive
             $incentiveDue = 0;
-            if ($src->rate_type === 'percent') {
+            if ($src->rate_type === 'percentage') {
                 $incentiveDue = $billTotal * ((float)$src->rate_value / 100);
             } elseif ($src->rate_type === 'fixed') {
                 $incentiveDue = (float)$src->rate_value * $patients;
@@ -500,11 +587,10 @@ class ReportsController extends Controller
         $ipdCharges = IpdCharge::with(['admission.patient'])
             ->whereDate('charge_date', $ds)->get();
 
-        // Lab orders created today (billable)
-        $labRevenue = DB::table('lab_order_items')
-            ->join('lab_orders', 'lab_orders.id', '=', 'lab_order_items.lab_order_id')
-            ->whereDate('lab_orders.ordered_date', $ds)
-            ->sum('lab_order_items.price');
+        // Lab orders created today (billable, incl. panels; cancelled excluded)
+        $labDay     = $this->labDaily($ds, $ds)[$ds] ?? [];
+        $labRevenue = $labDay['revenue'] ?? 0;
+        $labProfit  = $labDay['profit'] ?? 0;
 
         $labCount = DB::table('lab_orders')->whereDate('ordered_date', $ds)->count();
 
@@ -533,13 +619,14 @@ class ReportsController extends Controller
             'ipd_deposits'   => $ipdDeposits->sum('amount'),
             'ipd_charges'    => $ipdCharges->sum('amount'),
             'lab_revenue'    => (float) $labRevenue,
+            'lab_profit'     => $labProfit,
             'radio_revenue'  => (float) $radioRevenue,
             'total_collected'=> $opdPayments->sum('amount') + $ipdDeposits->sum('amount'),
         ];
 
         return view('reports.day-end', compact(
             'date', 'opdBills', 'ipdDeposits', 'ipdCharges',
-            'labRevenue', 'labCount', 'radioRevenue', 'radioCount',
+            'labRevenue', 'labProfit', 'labCount', 'radioRevenue', 'radioCount',
             'byMethod', 'depositByMethod', 'summary'
         ));
     }
@@ -690,49 +777,293 @@ class ReportsController extends Controller
                             ->whereDate('follow_up_date','<=', today()->addDays(7))->count(),
         ];
 
-        return view('reports.follow-up', compact('encounters', 'doctors', 'filter', 'doctorId', 'q', 'counts'));
+        // Patients who already came back (a later encounter) or booked an
+        // appointment on/after the follow-up date don't need a reminder; the
+        // view flags them and leaves them out of "select all".
+        $patientIds = $encounters->pluck('patient_id')->unique();
+        $lastVisit = \App\Models\Encounter::whereIn('patient_id', $patientIds)
+            ->where('status', '!=', 'cancelled')
+            ->groupBy('patient_id')->selectRaw('patient_id, MAX(encounter_date) as d')->pluck('d', 'patient_id');
+        $lastBooking = \App\Models\Appointment::whereIn('patient_id', $patientIds)
+            ->where('status', '!=', 'Cancelled')
+            ->groupBy('patient_id')->selectRaw('patient_id, MAX(appointment_date) as d')->pluck('d', 'patient_id');
+        $returned = [];
+        foreach ($encounters as $e) {
+            if (($v = $lastVisit[$e->patient_id] ?? null) && $v > $e->encounter_date->toDateString()) {
+                $returned[$e->id] = 'Returned';
+            } elseif (($b = $lastBooking[$e->patient_id] ?? null) && substr($b, 0, 10) >= $e->follow_up_date->toDateString()) {
+                $returned[$e->id] = 'Booked';
+            }
+        }
+
+        return view('reports.follow-up', compact('encounters', 'doctors', 'filter', 'doctorId', 'q', 'counts', 'returned'));
+    }
+
+    // Follow-up reminders deliberately leave out the doctor's follow-up note and
+    // diagnosis (often empty or clinical); they use a fixed review sentence.
+    private const FOLLOWUP_REVIEW_LINE = 'Your doctor would like to review your progress.';
+
+    /** First phone number in the clinic_phone setting ("Call: 9242001215, …" -> "9242001215"). */
+    private function followUpPhone(): ?string
+    {
+        return preg_match('/\+?\d[\d -]{7,}\d/', (string) setting('clinic_phone'), $m) ? $m[0] : null;
+    }
+
+    /** Patient name for the greeting, with stray spaces collapsed ("Kenny  David" -> "Kenny David"). */
+    private function followUpName(\App\Models\Encounter $e): string
+    {
+        return trim(preg_replace('/\s+/', ' ', (string) $e->patient->full_name)) ?: 'there';
+    }
+
+    /** Email reminder text. */
+    /**
+     * Lab revenue and profit per day (keyed 'Y-m-d') between $from and $to inclusive,
+     * by lab order date, excluding cancelled orders.
+     *  - revenue: lab_orders.total_amount (includes panel prices; panel test lines
+     *    themselves are priced 0, so summing lines would miss panels).
+     *  - profit: individual tests: the profit snapshotted on the line when ordered,
+     *    else the test's current profit; panels: the panel profit snapshotted on the
+     *    panel's first line, else the panel's current profit, counted once per
+     *    panel per order.
+     */
+    private function labDaily(string $from, string $to): array
+    {
+        $orders = fn () => DB::table('lab_orders')
+            ->whereBetween(DB::raw('DATE(lab_orders.ordered_date)'), [$from, $to])
+            ->where('lab_orders.status', '!=', 'Cancelled');
+
+        $out = [];
+        foreach ($orders()->selectRaw('DATE(ordered_date) d, SUM(total_amount) t')->groupBy('d')->pluck('t', 'd') as $d => $v) {
+            $out[$d]['revenue'] = (float) $v;
+        }
+
+        $testProfit = $orders()
+            ->join('lab_order_items as i', 'i.lab_order_id', '=', 'lab_orders.id')
+            ->leftJoin('lab_tests as t', 't.id', '=', 'i.lab_test_id')
+            ->whereNull('i.lab_panel_id')
+            ->selectRaw('DATE(lab_orders.ordered_date) d, SUM(COALESCE(i.profit, t.profit, 0)) t')
+            ->groupBy('d')->pluck('t', 'd');
+
+        $panelGroups = $orders()
+            ->join('lab_order_items as i', 'i.lab_order_id', '=', 'lab_orders.id')
+            ->whereNotNull('i.lab_panel_id')
+            ->groupBy('lab_orders.id', 'i.lab_panel_id', 'd')
+            ->selectRaw('DATE(lab_orders.ordered_date) d, i.lab_panel_id, MAX(i.profit) snap');
+        $panelProfit = DB::query()->fromSub($panelGroups, 'g')
+            ->leftJoin('lab_panels as p', 'p.id', '=', 'g.lab_panel_id')
+            ->selectRaw('g.d, SUM(COALESCE(g.snap, p.profit, 0)) t')
+            ->groupBy('g.d')->pluck('t', 'd');
+
+        foreach ([$testProfit, $panelProfit] as $rows) {
+            foreach ($rows as $d => $v) {
+                $out[$d]['profit'] = ($out[$d]['profit'] ?? 0) + (float) $v;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * In-house pharmacy sales and profit per day (keyed 'Y-m-d'), from 'dispensed'
+     * stock transactions. Sale value uses the same rule as PharmacySaleVoucherPoster
+     * (the accounts' pharmacy sales): medicine.unit_price, else batch unit_cost plus
+     * the accounts_pharmacy_sale_markup_pct markup. Cost is the batch's unit_cost.
+     * Profit is only counted on lines with both a sale value and a known cost;
+     * 'unpriced' counts the other lines so the dashboard can say how many were left out.
+     */
+    private function pharmacyDaily(string $from, string $to): array
+    {
+        $markup = 1 + (float) (setting('accounts_pharmacy_sale_markup_pct') ?? 0) / 100;
+        $sale = "CASE WHEN m.unit_price > 0 THEN t.quantity * m.unit_price
+                      WHEN s.unit_cost > 0 THEN t.quantity * s.unit_cost * {$markup} ELSE 0 END";
+        $rows = DB::table('stock_transactions as t')
+            ->leftJoin('medicines as m', 'm.id', '=', 't.medicine_id')
+            ->leftJoin('pharmacy_stock as s', 's.id', '=', 't.pharmacy_stock_id')
+            ->where('t.type', 'dispensed')->where('t.quantity', '>', 0)
+            ->whereBetween(DB::raw('DATE(t.created_at)'), [$from, $to])
+            ->groupBy('d')
+            ->selectRaw("DATE(t.created_at) d,
+                SUM({$sale}) sale,
+                SUM(CASE WHEN s.unit_cost > 0 AND ({$sale}) > 0 THEN ({$sale}) - t.quantity * s.unit_cost ELSE 0 END) profit,
+                SUM(CASE WHEN s.unit_cost > 0 AND ({$sale}) > 0 THEN 0 ELSE 1 END) unpriced,
+                COUNT(*) n")
+            ->get();
+        $out = [];
+        foreach ($rows as $row) {
+            $out[$row->d] = ['sale' => (float) $row->sale, 'profit' => (float) $row->profit, 'unpriced' => (int) $row->unpriced, 'n' => (int) $row->n];
+        }
+        return $out;
+    }
+
+    private function followUpBody(\App\Models\Encounter $e): string
+    {
+        $clinic = setting('clinic_name', config('app.name', 'Speciality Care'));
+        $phone  = $this->followUpPhone();
+        return "Hi " . $this->followUpName($e) . ",\n\n"
+             . "Friendly reminder: you are advised a follow-up visit on {$e->follow_up_date->format('d M Y')}. "
+             . self::FOLLOWUP_REVIEW_LINE . "\n\n"
+             . "Please call us" . ($phone ? " at {$phone}" : '') . " to confirm your slot.\n\n"
+             . "Regards,\n{$clinic} team";
+    }
+
+    /** Follow-up tracker: WhatsApp this encounter's follow-up reminder now. */
+    public function followUpRemindWhatsApp(\App\Models\Encounter $encounter, \App\Services\WhatsAppService $wa)
+    {
+        abort_unless($wa->isEnabled(), 422, 'WhatsApp is not enabled (notifications module is off).');
+        $e = $encounter->load('patient', 'doctor');
+        abort_unless($e->follow_up_date, 422, 'This encounter has no follow-up date.');
+        abort_unless($e->patient && ($e->patient->phone || $e->patient->alt_phone), 422, 'This patient has no phone on file.');
+
+        $clinic = setting('clinic_name', config('app.name', 'Speciality Care'));
+        $name   = $this->followUpName($e);
+        $phone  = $this->followUpPhone();
+        $date   = $e->follow_up_date->format('d M Y');
+
+        // Approved template followup (fixed text, only {{n}} can vary):
+        //   "Hi {{1}}, friendly reminder: {{2}} advised a follow-up visit on {{3}}. {{4}}
+        //    Please call us to confirm your slot. Regards, {{5}} team."
+        // {{2}} = "you are" -> "you are advised…"; the number can't go into the fixed
+        // "Please call us…" sentence, so it rides in {{4}} after the review line.
+        $params = [$name, 'you are', $date, self::FOLLOWUP_REVIEW_LINE . ($phone ? " Our number is {$phone}." : ''), $clinic];
+        // Same ref key as encounters:send-followup-whatsapp so the cron won't resend.
+        $body = "Hi {$params[0]}, friendly reminder: {$params[1]} advised a follow-up visit on {$params[2]}. {$params[3]} "
+              . "Please call us to confirm your slot. Regards, {$params[4]} team.\n[ref:followup_{$e->id}]";
+
+        $r = $wa->sendTemplateToPatient(
+            $e->patient,
+            'followup',
+            $params,
+            $body,
+            'followup',
+            auth()->id(),
+        );
+        if ($r['ok'] ?? false) {
+            $e->forceFill(['followup_whatsapp_sent_at' => now()])->save();
+            return response()->json(['success' => true, 'message' => 'WhatsApp reminder sent.']);
+        }
+        return response()->json(['success' => false, 'message' => 'WhatsApp not sent: ' . ($r['skipped'] ?? $r['error'] ?? 'unknown')], 422);
+    }
+
+    /** Follow-up tracker: email this encounter's follow-up reminder now (to patient, CC clinic). */
+    public function followUpRemindEmail(\App\Models\Encounter $encounter)
+    {
+        $e = $encounter->load('patient', 'doctor');
+        abort_unless($e->follow_up_date, 422, 'This encounter has no follow-up date.');
+        abort_unless($e->patient && $e->patient->email, 422, 'This patient has no email on file.');
+        $clinic = setting('clinic_name', config('app.name', 'Speciality Care'));
+        $cc = setting('clinic_email') ?: 'xpindia@gmail.com';
+        try {
+            \Illuminate\Support\Facades\Mail::raw($this->followUpBody($e), function ($m) use ($e, $cc, $clinic) {
+                $m->to($e->patient->email)->subject("Follow-up reminder — {$clinic}");
+                if ($cc) $m->cc($cc);
+            });
+            $e->forceFill(['followup_email_sent_at' => now()])->save();
+            return response()->json(['success' => true, 'message' => 'Email reminder sent to ' . $e->patient->email]);
+        } catch (\Throwable $ex) {
+            return response()->json(['success' => false, 'message' => 'Email failed: ' . $ex->getMessage()], 500);
+        }
     }
 
     public function revenueDashboard(Request $request)
     {
-        $months = collect(range(11, 0))->map(fn($i) => now()->startOfMonth()->subMonths($i));
+        // Range: ?from=Y-m-d&to=Y-m-d (default: last 12 months), grouped by
+        // ?group=day|week|month (default: picked from the range length).
+        try {
+            $to   = $request->filled('to')   ? \Carbon\Carbon::parse($request->to)->startOfDay()   : today();
+            $from = $request->filled('from') ? \Carbon\Carbon::parse($request->from)->startOfDay() : today()->startOfMonth()->subMonths(11);
+        } catch (\Throwable $e) {
+            $to = today(); $from = today()->startOfMonth()->subMonths(11);
+        }
+        if ($from->gt($to)) [$from, $to] = [$to, $from];
+        $days  = $from->diffInDays($to) + 1;
+        $group = in_array($request->group, ['day', 'week', 'month'], true)
+            ? $request->group
+            : ($days <= 31 ? 'day' : ($days <= 120 ? 'week' : 'month'));
+        if ($group === 'day' && $days > 366) $group = 'week';   // keep the chart readable
 
-        $opdRev = DB::table('bills')
-            ->selectRaw("DATE_FORMAT(created_at,'%Y-%m') as ym, SUM(paid_amount) as total")
-            ->whereNotNull('paid_amount')
-            ->groupBy('ym')->pluck('total','ym');
+        $f = $from->toDateString(); $t = $to->toDateString();
+        $daily = [];
+        $add = function ($rows, string $key) use (&$daily) {
+            foreach ($rows as $d => $v) $daily[$d][$key] = ($daily[$d][$key] ?? 0) + (float) $v;
+        };
+        $add(DB::table('bills')->whereNotNull('paid_amount')
+                ->whereBetween(DB::raw('DATE(created_at)'), [$f, $t])
+                ->selectRaw('DATE(created_at) d, SUM(paid_amount) v')->groupBy('d')->pluck('v', 'd'), 'opd');
+        $add(DB::table('ipd_deposits')
+                ->whereBetween(DB::raw('DATE(created_at)'), [$f, $t])
+                ->selectRaw('DATE(created_at) d, SUM(amount) v')->groupBy('d')->pluck('v', 'd'), 'ipd');
+        foreach ($this->labDaily($f, $t) as $d => $v) {
+            $daily[$d]['lab']    = $v['revenue'] ?? 0;
+            $daily[$d]['profit'] = $v['profit'] ?? 0;
+        }
+        $pharmLines = $pharmUnpriced = 0;
+        foreach ($this->pharmacyDaily($f, $t) as $d => $v) {
+            $daily[$d]['pharm']        = $v['sale'];
+            $daily[$d]['pharm_profit'] = $v['profit'];
+            $pharmLines += $v['n']; $pharmUnpriced += $v['unpriced'];
+        }
 
-        $ipdRev = DB::table('ipd_deposits')
-            ->selectRaw("DATE_FORMAT(created_at,'%Y-%m') as ym, SUM(amount) as total")
-            ->groupBy('ym')->pluck('total','ym');
+        // Buckets covering the whole range (weeks start Monday).
+        $periods = [];
+        $cursor = match ($group) {
+            'day'   => $from->copy(),
+            'week'  => $from->copy()->startOfWeek(\Carbon\Carbon::MONDAY),
+            'month' => $from->copy()->startOfMonth(),
+        };
+        while ($cursor->lte($to)) {
+            $end = match ($group) {
+                'day'   => $cursor->copy(),
+                'week'  => $cursor->copy()->endOfWeek(\Carbon\Carbon::SUNDAY)->startOfDay(),
+                'month' => $cursor->copy()->endOfMonth()->startOfDay(),
+            };
+            $label = match ($group) {
+                'day'   => $cursor->format('d M'),
+                'week'  => $cursor->format('d M') . ' – ' . $end->format('d M'),
+                'month' => $cursor->format('M Y'),
+            };
+            $periods[$cursor->toDateString()] = ['label' => $label, 'start' => $cursor->copy()->max($from), 'end' => $end->copy()->min($to),
+                                                 'opd' => 0, 'ipd' => 0, 'lab' => 0, 'profit' => 0, 'pharm' => 0, 'pharm_profit' => 0];
+            $cursor = $end->copy()->addDay();
+        }
+        $keys = array_keys($periods);
+        foreach ($daily as $d => $v) {
+            $date = \Carbon\Carbon::parse($d);
+            $k = match ($group) {
+                'day'   => $d,
+                'week'  => $date->copy()->startOfWeek(\Carbon\Carbon::MONDAY)->toDateString(),
+                'month' => $date->copy()->startOfMonth()->toDateString(),
+            };
+            if (!isset($periods[$k])) continue;
+            foreach (['opd', 'ipd', 'lab', 'profit', 'pharm', 'pharm_profit'] as $m) $periods[$k][$m] += $v[$m] ?? 0;
+        }
 
-        $labRev = DB::table('lab_order_items')
-            ->selectRaw("DATE_FORMAT(created_at,'%Y-%m') as ym, SUM(price) as total")
-            ->groupBy('ym')->pluck('total','ym');
-
-        $chartLabels  = $months->map(fn($m) => $m->format('M Y'));
-        $chartOpd     = $months->map(fn($m) => (float)($opdRev[$m->format('Y-m')] ?? 0));
-        $chartIpd     = $months->map(fn($m) => (float)($ipdRev[$m->format('Y-m')] ?? 0));
-        $chartLab     = $months->map(fn($m) => (float)($labRev[$m->format('Y-m')] ?? 0));
-
-        $currentMonth = now()->format('Y-m');
-        $donut = [
-            'OPD'   => (float)($opdRev[$currentMonth] ?? 0),
-            'IPD'   => (float)($ipdRev[$currentMonth] ?? 0),
-            'Lab'   => (float)($labRev[$currentMonth] ?? 0),
-        ];
+        $totals = ['opd' => 0, 'ipd' => 0, 'lab' => 0, 'profit' => 0, 'pharm' => 0, 'pharm_profit' => 0];
+        foreach ($periods as $p) foreach ($totals as $m => $_) $totals[$m] += $p[$m];
+        $totals['all'] = $totals['opd'] + $totals['ipd'] + $totals['lab'] + $totals['pharm'];
+        $totals['profit_all'] = $totals['profit'] + $totals['pharm_profit'];
 
         $topDoctors = DB::table('bills')
             ->join('encounters','encounters.id','=','bills.encounter_id')
             ->join('doctors','doctors.id','=','encounters.doctor_id')
             ->selectRaw("CONCAT(doctors.first_name,' ',doctors.last_name) as name, SUM(bills.paid_amount) as total, COUNT(*) as cnt")
-            ->whereRaw("DATE_FORMAT(bills.created_at,'%Y-%m') = ?", [$currentMonth])
+            ->whereBetween(DB::raw('DATE(bills.created_at)'), [$f, $t])
             ->groupBy('doctors.id','name')
             ->orderByDesc('total')
             ->limit(5)
             ->get();
 
-        return view('reports.revenue', compact('chartLabels','chartOpd','chartIpd','chartLab','donut','topDoctors'));
+        // Quick ranges (Indian financial year runs Apr–Mar).
+        $fyStart = today()->month >= 4 ? today()->setDate(today()->year, 4, 1) : today()->setDate(today()->year - 1, 4, 1);
+        $presets = [
+            'Today'         => [today(), today()],
+            'This Week'     => [today()->startOfWeek(\Carbon\Carbon::MONDAY), today()],
+            'This Month'    => [today()->startOfMonth(), today()],
+            'Last Month'    => [today()->subMonthNoOverflow()->startOfMonth(), today()->subMonthNoOverflow()->endOfMonth()],
+            'Last 3 Months' => [today()->startOfMonth()->subMonths(2), today()],
+            'This FY'       => [$fyStart, today()],
+            'Last 12 Months'=> [today()->startOfMonth()->subMonths(11), today()],
+        ];
+
+        return view('reports.revenue', compact('from', 'to', 'group', 'periods', 'totals', 'topDoctors', 'presets', 'pharmLines', 'pharmUnpriced'));
     }
 
     // ── CSV Exports ──────────────────────────────────────────────────────────
@@ -867,6 +1198,7 @@ class ReportsController extends Controller
 
         $base = DB::table('diagnoses')
             ->join('encounters', 'encounters.id', '=', 'diagnoses.encounter_id')
+            ->whereNull('encounters.deleted_at')
             ->whereBetween('encounters.encounter_date', [$fromDate, $toDate])
             ->whereNotNull('diagnoses.diagnosis_name')
             ->where('diagnoses.diagnosis_name', '!=', '');

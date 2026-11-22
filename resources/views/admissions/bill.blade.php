@@ -91,6 +91,11 @@
                 </select>
             </div>
             <div style="margin-bottom:12px">
+                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Payment Date *</label>
+                <input type="date" name="payment_date" value="{{ today()->toDateString() }}" max="{{ today()->toDateString() }}" required
+                       style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px">
+            </div>
+            <div style="margin-bottom:12px">
                 <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Transaction Ref / Receipt No</label>
                 <input type="text" name="transaction_ref" class="form-control" placeholder="Optional"
                        style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px">
@@ -117,7 +122,7 @@
 {{-- Letterhead --}}
 @if(setting('print_header_enabled','1') !== '0')
 <div class="letterhead">
-    <div class="clinic-name">{{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}</div>
+    <div class="clinic-name">{{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}</div>
     <div class="clinic-sub">{{ setting('clinic_address', '') }}</div>
     <div class="clinic-sub">{{ setting('clinic_phone', '') }}{{ setting('clinic_email') ? ' · ' . setting('clinic_email') : '' }}</div>
 </div>
@@ -236,14 +241,14 @@
 <div class="signature-row">
     <div class="sig-box">Patient / Attendant Signature</div>
     <div class="sig-box">
-        Authorised Signatory<br>{{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}
+        Authorised Signatory<br>{{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}
     </div>
 </div>
 
 @if(setting('print_footer_enabled','1') !== '0')
 <div class="footer-note">
     Bill generated on {{ now()->format('d-m-Y h:i A') }} by {{ auth()->user()->name }} &nbsp;·&nbsp;
-    {{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}
+    {{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}
     &nbsp;·&nbsp; This is a computer-generated bill.
 </div>
 @endif

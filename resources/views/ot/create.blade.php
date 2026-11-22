@@ -8,6 +8,7 @@
     <h1>Record New Operation</h1>
     <div class="breadcrumb"><a href="{{ route('ot.index') }}">OT Register</a> &rsaquo; New</div>
   </div>
+  @include('diagnostics._toolbar', ['inline'=>true])
 </div>
 
 <form method="POST" action="{{ route('ot.store') }}">

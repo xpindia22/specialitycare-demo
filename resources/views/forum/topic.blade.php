@@ -72,7 +72,7 @@
             </div>
             <a href="#post-{{ $p->id }}" class="text-muted" style="font-size:11px">#{{ $p->id }}</a>
         </div>
-        <div class="post-body">{{ $p->body }}</div>
+        <div class="post-body">{!! \App\Support\MessageFormatter::toHtml($p->body) !!}</div>
         <div class="post-foot">
             @if($p->edited_at)
                 <span><i class="fa-solid fa-pen-to-square"></i> edited {{ $p->edited_at->diffForHumans() }} by {{ $p->editor?->name ?? '—' }}</span>

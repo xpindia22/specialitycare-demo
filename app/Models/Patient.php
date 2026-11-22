@@ -24,13 +24,14 @@ class Patient extends Model implements Authenticatable
         'insurance_company', 'policy_no', 'tpa_name', 'insurance_valid_until',
         'referral_source_id', 'allergies', 'is_chronic',
         'portal_enabled', 'portal_pin', 'portal_pin_set_at',
+        'is_pinned',
     ];
 
     protected $hidden = ['portal_pin'];
 
     protected $casts = [
         'date_of_birth' => 'date', 'is_active' => 'boolean', 'insurance_valid_until' => 'date',
-        'is_chronic' => 'boolean',
+        'is_chronic' => 'boolean', 'is_pinned' => 'boolean',
         'portal_enabled' => 'boolean', 'portal_pin_set_at' => 'datetime',
     ];
 
@@ -77,6 +78,11 @@ class Patient extends Model implements Authenticatable
     public function encounters() { return $this->hasMany(Encounter::class); }
     public function communications() { return $this->hasMany(\App\Models\PatientCommunication::class)->latest('occurred_at'); }
     public function prescriptions() { return $this->hasMany(Prescription::class); }
+    public function glucoseLogs() { return $this->hasMany(\App\Models\GlucoseLog::class)->latest('logged_at'); }
+    public function bpLogs() { return $this->hasMany(\App\Models\BpLog::class)->latest('logged_at'); }
+    public function healthMetrics() { return $this->hasMany(\App\Models\HealthMetric::class)->latest('logged_at'); }
+    public function dietLogs() { return $this->hasMany(\App\Models\DietLog::class)->latest('logged_at'); }
+    public function exerciseLogs() { return $this->hasMany(\App\Models\ExerciseLog::class)->latest('logged_at'); }
     public function bills() { return $this->hasMany(Bill::class); }
     public function labOrders() { return $this->hasMany(LabOrder::class); }
     public function clinicalNotes() { return $this->hasMany(ClinicalNote::class); }

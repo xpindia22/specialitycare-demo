@@ -13,6 +13,7 @@ class Bed extends Model
         'occupied'    => ['label' => 'Occupied',     'color' => 'red'],
         'reserved'    => ['label' => 'Reserved',     'color' => 'amber'],
         'maintenance' => ['label' => 'Maintenance',  'color' => 'grey'],
+        'cleaning'    => ['label' => 'Cleaning',     'color' => 'blue'],
     ];
 
     public function ward()       { return $this->belongsTo(Ward::class); }

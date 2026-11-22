@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Mail;
 /**
  * Sends a short admin-facing email when significant domain events happen
  * (visits, prescriptions, bills, etc.). Configured via env:
- *   ADMIN_NOTIFY_EMAIL=admin@demo.local
+ *   ADMIN_NOTIFY_EMAIL=xpindia@gmail.com
  *   ADMIN_NOTIFY_ENABLED=true
  *
  * - Skips when running under artisan / seeders
@@ -80,7 +80,7 @@ class AdminNotifier
     }
 
     /**
-     * Short single-line actor descriptor: "Sample Admin (admin, admin@demo.local)".
+     * Short single-line actor descriptor: "Robert James (admin, xpindia@gmail.com)".
      * Falls back to "System" for console/unauth contexts (cron, seeders, etc.).
      * Use actorContext() when you also want the IP / user-agent block.
      */

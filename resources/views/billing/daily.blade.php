@@ -3,12 +3,15 @@
 @section('title','Daily Report')
 @section('page-title','Daily Collection Report')
 @section('content')
+
 <div class="page-header">
     <div class="page-header-left">
         <h1>Daily Collection Report</h1>
         <div class="breadcrumb">{{ $date->format('l, d F Y') }}</div>
     </div>
-    <button onclick="window.print()" class="btn btn-outline no-print"><i class="fa-solid fa-print"></i> Print</button>
+    @include('billing._toolbar', ['inline'=>true, 'extra' => [
+        ['url'=>'#', 'onclick'=>'window.print();return false;', 'icon'=>'fa-print', 'label'=>'Print', 'bg'=>'#0f766e'],
+    ]])
 </div>
 
 <form method="GET" class="card mb-4 no-print" style="padding:14px 20px">

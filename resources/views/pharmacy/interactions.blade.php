@@ -4,6 +4,8 @@
 @section('page-title','Drug Interactions')
 @section('content')
 
+@include('pharmacy._toolbar')
+
 <div class="page-header">
     <div class="page-header-left">
         <h1><i class="fa-solid fa-triangle-exclamation" style="color:var(--sc-amber)"></i> Drug Interaction Database</h1>

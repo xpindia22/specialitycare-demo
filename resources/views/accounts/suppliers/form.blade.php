@@ -3,6 +3,8 @@
 @section('page-title', $supplier->exists ? 'Edit Supplier' : 'New Supplier')
 @section('content')
 
+@include('accounts._toolbar')
+
 <div class="page-header">
     <div class="page-header-left">
         <a href="{{ route('accounts.suppliers.index') }}" class="text-small"><i class="fa-solid fa-arrow-left"></i> Suppliers</a>

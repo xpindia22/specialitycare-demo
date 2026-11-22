@@ -3,6 +3,8 @@
 @section('page-title','New Voucher')
 @section('content')
 
+@include('accounts._toolbar')
+
 <div class="page-header">
     <div class="page-header-left">
         <a href="{{ route('accounts.vouchers.index') }}" class="text-small"><i class="fa-solid fa-arrow-left"></i> Vouchers</a>

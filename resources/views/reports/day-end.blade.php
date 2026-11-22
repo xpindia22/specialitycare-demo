@@ -70,6 +70,7 @@
         <div>
             <div class="stat-value">₹{{ number_format($summary['lab_revenue'], 0) }}</div>
             <div class="stat-label">Lab Revenue <span class="stat-sub text-muted">({{ $labCount }} orders)</span></div>
+            <div class="stat-sub" style="color:var(--sc-green)">Profit ₹{{ number_format($summary['lab_profit'], 0) }}</div>
         </div>
     </div>
     <div class="stat-card">

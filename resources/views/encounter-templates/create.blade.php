@@ -6,6 +6,7 @@
 <div class="page-header">
     <div class="page-header-left"><h1>New Encounter Template</h1></div>
     <a href="{{ route('encounter-templates.index') }}" class="btn btn-outline">Back</a>
+    ('templates._toolbar', ['inline'=>true])
 </div>
 
 @if($errors->any())

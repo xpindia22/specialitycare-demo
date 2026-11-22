@@ -3,12 +3,14 @@
 @section('page-title','Ledgers')
 @section('content')
 
+@include('accounts._toolbar', ['extra' => [
+    ['url' => route('accounts.ledgers.create'), 'icon' => 'fa-plus', 'label' => 'New Ledger', 'bg' => '#0d9488'],
+]])
+
 <div class="page-header">
     <div class="page-header-left">
-        <a href="{{ route('accounts.index') }}" class="text-small" style="text-decoration:none"><i class="fa-solid fa-arrow-left"></i> Accounts</a>
         <h1>Chart of Accounts</h1>
     </div>
-    <a href="{{ route('accounts.ledgers.create') }}" class="btn btn-primary"><i class="fa-solid fa-plus"></i> New Ledger</a>
 </div>
 
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif

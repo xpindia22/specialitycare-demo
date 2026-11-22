@@ -34,7 +34,7 @@
             <div class="pm-row {{ $m->sender }}">
                 <div class="pm-bubble">
                     @if($m->sender === 'staff')<div style="font-size:11px;font-weight:700;color:#00a884">{{ $m->user?->name ?? 'Clinic' }}</div>@endif
-                    {!! nl2br(e($m->body)) !!}
+                    {!! \App\Support\MessageFormatter::toHtml($m->body, [], true) !!}
                     <span class="pm-meta">{{ $m->created_at->format('d M, H:i') }}</span>
                 </div>
             </div>

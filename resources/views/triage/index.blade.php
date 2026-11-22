@@ -4,6 +4,11 @@
 @section('page-title','Nursing Station')
 @section('content')
 
+<div class="page-header">
+    <div class="page-header-left"><h1>Nursing Station</h1></div>
+    @include('opd._toolbar', ['inline'=>true])
+</div>
+
 @if(session('success'))
     <div class="alert alert-success">{{ session('success') }}</div>
 @endif
@@ -15,9 +20,7 @@
     <div class="ns-stat ns-stat-active"> <div class="ns-stat-num">{{ $stats['in_consultation'] }}</div>  <div class="ns-stat-lbl">In Consult</div></div>
     <div class="ns-stat ns-stat-triage"> <div class="ns-stat-num">{{ $stats['pending_triage'] }}</div>   <div class="ns-stat-lbl">Pending Triage</div></div>
     <div class="ns-stat ns-stat-done">   <div class="ns-stat-num">{{ $stats['done'] }}</div>             <div class="ns-stat-lbl">Done</div></div>
-    <a href="{{ route('opd.board') }}" class="btn btn-outline ms-auto" target="_blank"><i class="fa-solid fa-display me-1"></i>Queue Board</a>
-    <a href="{{ route('opd.register') }}" class="btn btn-outline" target="_blank"><i class="fa-solid fa-clipboard-list me-1"></i>OPD Register</a>
-    <span id="refresh-badge" style="font-size:11px;color:#999;white-space:nowrap"><i class="fa-solid fa-rotate" style="font-size:10px"></i> refreshing in <span id="refresh-countdown">45</span>s</span>
+    <span id="refresh-badge" style="margin-left:auto;font-size:11px;color:#999;white-space:nowrap"><i class="fa-solid fa-rotate" style="font-size:10px"></i> refreshing in <span id="refresh-countdown">45</span>s</span>
 </div>
 
 <div class="ns-layout">
@@ -36,14 +39,33 @@
                     <div id="selectedPatient" class="selected-patient-box" style="display:none"></div>
                 </div>
                 <div class="form-group mt-3">
-                    <label class="form-label">Doctor</label>
-                    <select name="doctor_id" class="form-control">
-                        <option value="">— Any Doctor —</option>
-                        @foreach($doctors as $d)
-                            <option value="{{ $d->id }}">Dr. {{ $d->first_name }} {{ $d->last_name }}</option>
+                    <label class="form-label">Speciality</label>
+                    <select name="department_id" id="tokenDept" class="form-control" onchange="filterTokenDoctors()">
+                        <option value="">— Any Speciality —</option>
+                        @foreach($departments as $dep)
+                            <option value="{{ $dep->id }}">{{ $dep->name }}{{ $dep->token_prefix ? ' ('.$dep->token_prefix.'-tokens)' : '' }}</option>
                         @endforeach
                     </select>
                 </div>
+                <div class="form-group mt-3">
+                    <label class="form-label">Doctor</label>
+                    <select name="doctor_id" id="tokenDoctor" class="form-control">
+                        <option value="">— Any Doctor —</option>
+                        @foreach($doctors as $d)
+                            <option value="{{ $d->id }}" data-depts="{{ implode(',', $d->departmentIds()) }}">Dr. {{ $d->first_name }} {{ $d->last_name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <script>
+                // Speciality → only that department's doctors
+                function filterTokenDoctors() {
+                    const dep = document.getElementById('tokenDept').value, sel = document.getElementById('tokenDoctor');
+                    Array.from(sel.options).forEach(o => { o.hidden = !!(o.value && dep && !(o.dataset.depts || '').split(',').includes(dep)); });
+                    if (sel.selectedOptions[0]?.hidden) sel.value = '';
+                    const vis = Array.from(sel.options).filter(o => o.value && !o.hidden);
+                    if (dep && vis.length === 1) sel.value = vis[0].value;
+                }
+                </script>
                 <div class="form-group mt-3">
                     <label class="form-label">Priority</label>
                     <div class="d-flex gap-3 mt-1">
@@ -103,7 +125,11 @@
                             <div style="font-size:11px;color:#666">{{ $t->patient->jhc_id }}</div>
                             @if($t->purpose)<div style="font-size:11px;color:#888;font-style:italic">{{ $t->purpose }}</div>@endif
                         </td>
-                        <td style="font-size:12px">{{ $t->doctor ? 'Dr. '.$t->doctor->first_name.' '.$t->doctor->last_name : '—' }}</td>
+                        <td style="font-size:12px">{{ $t->doctor ? 'Dr. '.$t->doctor->first_name.' '.$t->doctor->last_name : '—' }}
+                            @if($t->department)
+                            <div style="font-size:11px;font-weight:600;color:{{ $t->department->color ?: '#666' }}"><i class="fa-solid {{ $t->department->icon ?: 'fa-hospital' }}"></i> {{ $t->department->name }}@if($t->department->room) &middot; {{ $t->department->room }}@endif</div>
+                            @endif
+                        </td>
                         <td>
                             @if($t->priority === 'urgent')
                                 <span class="badge badge-red"><i class="fa-solid fa-circle-exclamation me-1"></i>Urgent</span>

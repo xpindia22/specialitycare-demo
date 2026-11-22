@@ -26,7 +26,7 @@
 @section('content')
 <div class="page-header">
     <div class="page-header-left"><h1>Appointments</h1><div class="breadcrumb">Queue & Schedule</div></div>
-    <a href="{{ route('appointments.create') }}" class="btn btn-primary"><i class="fa-solid fa-calendar-plus"></i> Book Appointment</a>
+    @include('reception._toolbar', ['inline'=>true])
 </div>
 
 @php $range = $range ?? 'today'; $isCustom = request('date') || request('search') || request('day'); @endphp
@@ -107,7 +107,8 @@
                           : ($ad->equalTo($t->copy()->addDays(2))  ? 'appt-dayafter'
                           : ($ad->lt($t)                           ? 'appt-past' : 'appt-future')));
             @endphp
-            <tr class="{{ $dayClass }}">
+            <tr class="{{ $dayClass }}" style="cursor:pointer"
+                onclick="if(!event.target.closest('a,button,form,input,select,label')) location='{{ route('appointments.show', $a) }}'">
                 <td class="mono fw-600">{{ $a->appointment_no }}</td>
                 <td>
                     <a href="{{ route('patients.show', $a->patient) }}" style="font-weight:600;color:var(--sc-navy);text-decoration:none">{{ $a->patient->full_name }}</a>
@@ -141,12 +142,22 @@
                         @elseif($a->status === 'Checked-In')
                             <a href="{{ route('appointments.start-encounter', $a) }}" class="btn btn-sm btn-primary">Start Visit</a>
                             <form method="POST" action="{{ route('appointments.no-show', $a) }}" style="display:inline" onsubmit="return confirm('Mark as No-Show?')">@csrf<button class="btn btn-sm btn-outline" style="color:var(--sc-red);border-color:var(--sc-red)" title="No Show"><i class="fa-solid fa-user-slash"></i></button></form>
-                        @elseif($a->status === 'In-Progress')
+                        @elseif($a->status === 'In-Progress' && $a->encounter)
                             <a href="{{ route('encounters.show', $a->encounter) }}" class="btn btn-sm btn-amber">Continue</a>
+                        @elseif($a->status === 'In-Progress')
+                            <a href="{{ route('appointments.start-encounter', $a) }}" class="btn btn-sm btn-primary">Start Visit</a>
                         @endif
                         @if(in_array($a->status, ['Scheduled','Confirmed','Checked-In']))
                             <button type="button" class="btn btn-sm btn-outline" title="Email reminder to patient (CC clinic)" onclick="scRemind({{ $a->id }}, 'email', this)"><i class="fa-solid fa-envelope"></i></button>
                             <button type="button" class="btn btn-sm btn-outline" style="color:#25D366;border-color:#25D366" title="WhatsApp reminder to patient" onclick="scRemind({{ $a->id }}, 'whatsapp', this)"><i class="fa-brands fa-whatsapp"></i></button>
+                        @endif
+                        @if(in_array($a->status, ['Scheduled','Confirmed','Checked-In']))
+                            <form method="POST" action="{{ route('appointments.cancel', $a) }}" style="display:inline"
+                                  onsubmit="var r=prompt('Reason for cancelling this appointment?'); if(r===null||r.trim()==='')return false; this.reason.value=r; return true;">
+                                @csrf
+                                <input type="hidden" name="reason">
+                                <button class="btn btn-sm btn-outline" style="color:var(--sc-red);border-color:var(--sc-red)" title="Cancel appointment"><i class="fa-solid fa-ban"></i></button>
+                            </form>
                         @endif
                         <a href="{{ route('appointments.show', $a) }}" class="btn btn-sm btn-outline"><i class="fa-solid fa-eye"></i></a>
                     </div>

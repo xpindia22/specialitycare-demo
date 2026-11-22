@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login — Demo Clinic Pvt. Ltd.</title>
+    <title>Login — James Heart Care Pvt. Ltd.</title>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { margin:0;padding:0;box-sizing:border-box; }
@@ -33,25 +33,14 @@
         .divider::before, .divider::after { content:'';flex:1;height:1px;background:#e2e8f0; }
         .contact-footer { text-align:center;margin-top:22px;padding-top:14px;border-top:1px solid #e2e8f0;font-size:12px;color:#475569;line-height:1.55; }
         .contact-footer strong { color:#0f1f3d;font-weight:600; }
-        .demo-banner { background:#eef6ff;border:1px solid #b6d4fe;color:#084298;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.6; }
-        .demo-banner code { background:#fff;padding:1px 6px;border-radius:4px;font-size:12.5px;color:#0f1f3d; }
-        .demo-banner .demo-cred { margin-top:2px; }
-        .demo-banner .demo-note { margin-top:6px;font-size:11px;color:#3b6ea5; }
     </style>
 </head>
 <body>
 <div class="login-box">
     <div class="login-logo">
         <div class="logo-icon">♥</div>
-        <h1>Demo Clinic Pvt. Ltd.</h1>
+        <h1>James Heart Care Pvt. Ltd.</h1>
         <p>We Care · God Heals</p>
-    </div>
-
-    <div class="demo-banner">
-        <strong>🔑 Demo access</strong>
-        <div class="demo-cred">Email: <code>demo@specialitycare.co.in</code></div>
-        <div class="demo-cred">Password: <code>Demo@1234</code></div>
-        <div class="demo-note">Demonstration build — sample data only · license valid until 2026-12-01</div>
     </div>
 
     @if(session('error'))
@@ -67,7 +56,7 @@
     @csrf
     <div class="form-group">
         <label class="form-label">Email Address</label>
-        <input type="email" name="email" class="form-control {{ $errors->has('email') ? 'is-invalid':'' }}" value="{{ old('email', 'demo@specialitycare.co.in') }}" required autofocus placeholder="Enter your email">
+        <input type="email" name="email" class="form-control {{ $errors->has('email') ? 'is-invalid':'' }}" value="{{ old('email') }}" required autofocus placeholder="Enter your email">
         @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
     </div>
     <div class="form-group">
@@ -88,7 +77,7 @@
     </div>
 
     <div class="contact-footer">
-        <div><strong>WhatsApp Only:</strong> <a href="https://wa.me/919000000000" style="color:#0ab4b4;text-decoration:none">9000000000</a></div>
+        <div><strong>WhatsApp Only:</strong> <a href="https://wa.me/917432001215" style="color:#0ab4b4;text-decoration:none">7432001215</a></div>
         <div><strong>Call:</strong> <a href="tel:+919242001215" style="color:#475569;text-decoration:none">9242001215</a> &nbsp;·&nbsp; <a href="tel:+918900953527" style="color:#475569;text-decoration:none">8900953527</a></div>
     </div>
 

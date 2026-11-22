@@ -8,7 +8,9 @@
     <h1>Radiology Orders</h1>
     <div class="breadcrumb">Investigations &rsaquo; Radiology</div>
   </div>
-  <a href="{{ route('radiology.create') }}" class="btn btn-primary"><i class="fa-solid fa-plus"></i> New Order</a>
+  @include('diagnostics._toolbar', ['inline'=>true, 'extra' => [
+      ['url'=>route('radiology.create'), 'icon'=>'fa-plus', 'label'=>'New Order', 'bg'=>'#047857'],
+  ]])
 </div>
 
 <div class="card mb-4">

@@ -3,6 +3,8 @@
 @section('title','Stock Management')
 @section('page-title','Pharmacy Stock')
 @section('content')
+
+@include('pharmacy._toolbar')
 <div class="page-header">
     <div class="page-header-left"><h1>Stock Management</h1><div class="breadcrumb">Current inventory levels</div></div>
     <button class="btn btn-outline" onclick="document.getElementById('add-medicine-modal').classList.add('open')"><i class="fa-solid fa-pills"></i> Add Medicine</button>

@@ -142,7 +142,7 @@ table { border-collapse:collapse; }
                 @else
                     <div class="heart">&#9829;</div>
                 @endif
-                <div class="clinic-name">{{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}</div>
+                <div class="clinic-name">{{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}</div>
             </td>
             <td style="width:33%" class="right">
                 <div class="doc-info" style="text-align:right">
@@ -245,29 +245,37 @@ table { border-collapse:collapse; }
 
             @php
                 $rwmaSegments = [
-                    'Anterior'     => $echo->anterior_motion,
-                    'Anteroseptal' => $echo->anteroseptal_motion,
-                    'Inferior'     => $echo->inferior_motion,
-                    'Inferoseptal' => $echo->inferoseptal_motion,
-                    'Lateral'      => $echo->lateral_motion,
-                    'Posterior'    => $echo->posterior_motion,
-                    'Apex'         => $echo->apex_motion,
+                    'Anterior'     => ['val' => $echo->anterior_motion,     'terr' => 'LAD'],
+                    'Anteroseptal' => ['val' => $echo->anteroseptal_motion, 'terr' => 'LAD'],
+                    'Inferior'     => ['val' => $echo->inferior_motion,     'terr' => 'RCA'],
+                    'Inferoseptal' => ['val' => $echo->inferoseptal_motion, 'terr' => 'RCA'],
+                    'Lateral'      => ['val' => $echo->lateral_motion,      'terr' => 'LCx'],
+                    'Posterior'    => ['val' => $echo->posterior_motion,    'terr' => 'LCx / RCA'],
+                    'Apex'         => ['val' => $echo->apex_motion,         'terr' => 'LAD / RCA'],
                 ];
-                $abnormalSegments = collect($rwmaSegments)->filter(fn($v) => $v && $v !== 'Normal');
-                $hasRwma = $abnormalSegments->isNotEmpty() || !empty($echo->rwma_comments);
+                $abnormalSegments = collect($rwmaSegments)->filter(fn($s) => $s['val'] && $s['val'] !== 'Normal');
+                $hasRwma = $abnormalSegments->isNotEmpty() || !empty($echo->rwma_comments) || !empty($echo->la_clot) || !empty($echo->lv_clot);
             @endphp
             @if($hasRwma)
             <div class="section-bar">REGIONAL WALL MOTION</div>
-            <table class="parameters" style="margin-bottom:6px">
+            <table class="dop" style="margin-bottom:6px">
+                <thead>
+                    <tr>
+                        <th style="width:22%">SEGMENT</th>
+                        <th style="width:18%">TERRITORY</th>
+                        <th>WALL MOTION</th>
+                    </tr>
+                </thead>
                 <tbody>
-                    @foreach(array_chunk($rwmaSegments, 2, true) as $pair)
-                        <tr>
-                            @foreach($pair as $label => $value)
-                                <td class="lbl" style="width:18%">{{ $label }}</td>
-                                <td style="width:32%">{{ $value ?: '—' }}</td>
-                            @endforeach
-                        </tr>
+                    @foreach($rwmaSegments as $label => $seg)
+                        <tr><td class="valve">{{ $label }}</td><td>{{ $seg['terr'] }}</td><td>{{ $seg['val'] ?: 'Normal' }}</td></tr>
                     @endforeach
+                    @if($echo->la_clot)
+                        <tr><td class="valve">LA Clot</td><td>—</td><td>{{ $echo->la_clot }}</td></tr>
+                    @endif
+                    @if($echo->lv_clot)
+                        <tr><td class="valve">LV Clot</td><td>—</td><td>{{ $echo->lv_clot }}</td></tr>
+                    @endif
                 </tbody>
             </table>
             @if($echo->rwma_comments)

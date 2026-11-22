@@ -4,7 +4,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Appointment extends Model {
     protected $fillable = [
-        'appointment_no','patient_id','doctor_id','appointment_date','appointment_time',
+        'appointment_no','patient_id','doctor_id','department_id','appointment_date','appointment_time',
         'duration','type','status','chief_complaint','notes','meeting_url',
         'rescheduled_from','reschedule_reason','created_by','checked_in_at','completed_at',
         'booking_source','public_name','public_phone',
@@ -14,6 +14,7 @@ class Appointment extends Model {
     ];
     public function patient() { return $this->belongsTo(Patient::class); }
     public function doctor() { return $this->belongsTo(Doctor::class); }
+    public function department() { return $this->belongsTo(Department::class); }
     public function createdBy() { return $this->belongsTo(User::class,'created_by'); }
     public function rescheduledFrom() { return $this->belongsTo(Appointment::class,'rescheduled_from'); }
     public function encounter() { return $this->hasOne(Encounter::class); }
@@ -39,5 +40,13 @@ class Appointment extends Model {
         $last = static::where('appointment_no','like',$prefix.'%')->orderBy('id','desc')->first();
         $num = $last ? (int) substr($last->appointment_no,-5)+1 : 1;
         return $prefix.str_pad($num,5,'0',STR_PAD_LEFT);
+    }
+
+    /** Leave out appointments cancelled because the visit started from them was deleted. */
+    public function scopeWithoutDeletedVisits($query)
+    {
+        return $query->where(fn ($q) => $q->where('status', '!=', 'Cancelled')
+            ->orWhereNull('notes')
+            ->orWhere('notes', 'not like', '%' . \App\Http\Controllers\EncounterController::VISIT_DELETED_NOTE . '%'));
     }
 }

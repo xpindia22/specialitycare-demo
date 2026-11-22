@@ -57,6 +57,8 @@ class AppServiceProvider extends ServiceProvider
         // the billing UI is never blocked by accounting.
         \App\Models\Bill::observe(\App\Observers\BillVoucherObserver::class);
         \App\Models\Payment::observe(\App\Observers\PaymentVoucherObserver::class);
+        // Dispensing medicines → pharmacy Sales income (exempt; no output GST).
+        \App\Models\StockTransaction::observe(\App\Observers\StockTransactionObserver::class);
 
         // Auto-mark today's attendance for staff at first login of the day.
         // If the staff already has an attendance row for today (any status), don't touch it.

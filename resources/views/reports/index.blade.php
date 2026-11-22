@@ -63,6 +63,14 @@
        class="tab-btn {{ $tab==='doctor-revenue'?'active':'' }}"><i class="fa-solid fa-user-doctor"></i> Doctor Revenue</a>
     <a href="?tab=daily-collection&from={{ today()->toDateString() }}&to={{ today()->toDateString() }}"
        class="tab-btn {{ $tab==='daily-collection'?'active':'' }}"><i class="fa-solid fa-cash-register"></i> Daily Collection</a>
+    <a href="?tab=lab-revenue&from={{ $fromDate }}&to={{ $toDate }}&doctor_id={{ $doctorId }}"
+       class="tab-btn {{ $tab==='lab-revenue'?'active':'' }}"><i class="fa-solid fa-flask"></i> Lab Revenue</a>
+    <a href="?tab=pharmacy-revenue&from={{ $fromDate }}&to={{ $toDate }}&doctor_id={{ $doctorId }}"
+       class="tab-btn {{ $tab==='pharmacy-revenue'?'active':'' }}"><i class="fa-solid fa-pills"></i> Pharmacy Revenue</a>
+    <a href="?tab=consultation-revenue&from={{ $fromDate }}&to={{ $toDate }}&doctor_id={{ $doctorId }}"
+       class="tab-btn {{ $tab==='consultation-revenue'?'active':'' }}"><i class="fa-solid fa-user-doctor"></i> Consultation Revenue</a>
+    <a href="?tab=services-revenue&from={{ $fromDate }}&to={{ $toDate }}&doctor_id={{ $doctorId }}"
+       class="tab-btn {{ $tab==='services-revenue'?'active':'' }}"><i class="fa-solid fa-briefcase-medical"></i> Services Revenue</a>
 </div>
 
 @if($tab === 'admissions')
@@ -740,6 +748,164 @@
             @endforelse
             </tbody>
         </table>
+    </div>
+</div>
+@endif
+
+
+@php $rangeLabel = \Carbon\Carbon::parse($fromDate)->format('d M Y') . ' to ' . \Carbon\Carbon::parse($toDate)->format('d M Y'); @endphp
+
+@if($tab === 'lab-revenue')
+{{-- Lab Revenue: orders in range (panels included, cancelled excluded) --}}
+@php $b = $breakdown; $m = $b['revenue'] > 0 ? round($b['profit'] / $b['revenue'] * 100) : 0; @endphp
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:20px">
+    <div class="stat-card"><div class="stat-icon navy"><i class="fa-solid fa-vials"></i></div><div><div class="stat-value">{{ $b['rows']->count() }}</div><div class="stat-label">Lab Orders</div></div></div>
+    <div class="stat-card"><div class="stat-icon amber"><i class="fa-solid fa-flask"></i></div><div><div class="stat-value">₹{{ number_format($b['revenue'],0) }}</div><div class="stat-label">Lab Revenue</div></div></div>
+    <div class="stat-card"><div class="stat-icon green"><i class="fa-solid fa-sack-dollar"></i></div><div><div class="stat-value" style="color:var(--sc-green)">₹{{ number_format($b['profit'],0) }}</div><div class="stat-label">Lab Profit</div><div class="stat-sub text-muted">{{ $m }}% margin</div></div></div>
+</div>
+<div class="card">
+    <div class="card-header">
+        <i class="fa-solid fa-flask"></i> Lab Revenue — {{ $rangeLabel }}
+        <div class="card-actions"><button onclick="window.print()" class="btn btn-sm btn-outline no-print"><i class="fa-solid fa-print"></i> Print</button></div>
+    </div>
+    <div class="table-wrap">
+        <table class="sc-table">
+            <thead><tr><th>Date</th><th>Order No.</th><th>Patient</th><th>Panels / Tests</th><th>Status</th><th class="text-right">Amount</th><th class="text-right">Profit</th></tr></thead>
+            <tbody>
+            @forelse($b['rows'] as $o)
+            <tr style="cursor:pointer" onclick="location='{{ route('lab.order', $o->id) }}'">
+                <td style="white-space:nowrap">{{ \Carbon\Carbon::parse($o->ordered_date)->format('d M Y') }}</td>
+                <td class="mono fw-600">{{ $o->order_no }}</td>
+                <td><div class="fw-600">{{ $o->patient }}</div><div class="text-small text-muted mono">{{ $o->jhc_id }}</div></td>
+                <td class="text-small" style="max-width:320px">
+                    @if($o->panels)<div><span class="badge badge-navy">Panel</span> {{ $o->panels }}</div>@endif
+                    @if($o->tests)<div class="text-muted">{{ Str::limit($o->tests, 120) }}</div>@endif
+                </td>
+                <td><span class="badge badge-{{ $o->status === 'Completed' ? 'green' : 'amber' }}">{{ $o->status }}</span></td>
+                <td class="text-right fw-600">₹{{ number_format($o->total_amount,0) }}</td>
+                <td class="text-right fw-600" style="color:var(--sc-green)">₹{{ number_format($o->profit,0) }}</td>
+            </tr>
+            @empty
+            <tr><td colspan="7" class="text-center text-muted" style="padding:30px">No lab orders for this period.</td></tr>
+            @endforelse
+            </tbody>
+            @if($b['rows']->count())
+            <tfoot><tr style="font-weight:700;border-top:2px solid var(--sc-border)"><td colspan="5">Total</td><td class="text-right">₹{{ number_format($b['revenue'],0) }}</td><td class="text-right" style="color:var(--sc-green)">₹{{ number_format($b['profit'],0) }}</td></tr></tfoot>
+            @endif
+        </table>
+    </div>
+</div>
+@endif
+
+@if($tab === 'pharmacy-revenue')
+{{-- Pharmacy Revenue: dispensed medicines in range --}}
+@php $b = $breakdown; $m = $b['sale'] > 0 ? round($b['profit'] / $b['sale'] * 100) : 0; @endphp
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:20px">
+    <div class="stat-card"><div class="stat-icon navy"><i class="fa-solid fa-prescription-bottle"></i></div><div><div class="stat-value">{{ $b['rows']->count() }}</div><div class="stat-label">Dispenses</div></div></div>
+    <div class="stat-card"><div class="stat-icon teal"><i class="fa-solid fa-pills"></i></div><div><div class="stat-value">₹{{ number_format($b['sale'],0) }}</div><div class="stat-label">Pharmacy Sales</div></div></div>
+    <div class="stat-card"><div class="stat-icon amber"><i class="fa-solid fa-boxes-stacked"></i></div><div><div class="stat-value">₹{{ number_format($b['cost'],0) }}</div><div class="stat-label">Purchase Cost</div><div class="stat-sub text-muted">of priced dispenses</div></div></div>
+    <div class="stat-card"><div class="stat-icon green"><i class="fa-solid fa-sack-dollar"></i></div><div><div class="stat-value" style="color:var(--sc-green)">₹{{ number_format($b['profit'],0) }}</div><div class="stat-label">Medicine Profit</div><div class="stat-sub text-muted">{{ $m }}% of sales</div></div></div>
+</div>
+@if($b['unpriced'] > 0)
+<div class="alert alert-warning mb-4" style="font-size:13px">
+    <i class="fa-solid fa-circle-info"></i>
+    {{ $b['unpriced'] }} of {{ $b['rows']->count() }} dispenses have no selling price or no purchase cost, so their profit can't be worked out (shown as —).
+</div>
+@endif
+<div class="card">
+    <div class="card-header">
+        <i class="fa-solid fa-pills"></i> Pharmacy Revenue — {{ $rangeLabel }}
+        <div class="card-actions"><button onclick="window.print()" class="btn btn-sm btn-outline no-print"><i class="fa-solid fa-print"></i> Print</button></div>
+    </div>
+    <div class="table-wrap">
+        <table class="sc-table">
+            <thead><tr><th>Date</th><th>Medicine</th><th>Batch</th><th>Patient</th><th class="text-right">Qty</th><th class="text-right">Sale Value</th><th class="text-right">Cost</th><th class="text-right">Profit</th></tr></thead>
+            <tbody>
+            @forelse($b['rows'] as $l)
+            <tr>
+                <td style="white-space:nowrap">{{ \Carbon\Carbon::parse($l->created_at)->format('d M Y H:i') }}</td>
+                <td class="fw-600">{{ $l->medicine ?: '—' }}</td>
+                <td class="mono text-small text-muted">{{ $l->batch_number ?: '—' }}</td>
+                <td>@if($l->patient)<div>{{ $l->patient }}</div><div class="text-small text-muted mono">{{ $l->jhc_id }}</div>@else<span class="text-muted">{{ $l->reference ?: '—' }}</span>@endif</td>
+                <td class="text-right">{{ rtrim(rtrim(number_format($l->quantity,2),'0'),'.') }}</td>
+                <td class="text-right">{{ $l->sale > 0 ? '₹'.number_format($l->sale,2) : '—' }}</td>
+                <td class="text-right text-muted">{{ $l->cost !== null ? '₹'.number_format($l->cost,2) : '—' }}</td>
+                <td class="text-right fw-600" style="color:var(--sc-green)">{{ $l->profit !== null ? '₹'.number_format($l->profit,2) : '—' }}</td>
+            </tr>
+            @empty
+            <tr><td colspan="8" class="text-center text-muted" style="padding:30px">No medicines dispensed in this period.</td></tr>
+            @endforelse
+            </tbody>
+            @if($b['rows']->count())
+            <tfoot><tr style="font-weight:700;border-top:2px solid var(--sc-border)"><td colspan="5">Total</td><td class="text-right">₹{{ number_format($b['sale'],2) }}</td><td class="text-right">₹{{ number_format($b['cost'],2) }}</td><td class="text-right" style="color:var(--sc-green)">₹{{ number_format($b['profit'],2) }}</td></tr></tfoot>
+            @endif
+        </table>
+    </div>
+</div>
+@endif
+
+@if(in_array($tab, ['consultation-revenue', 'services-revenue']))
+{{-- Consultation / Services revenue: OPD bill line items (paid bills) in range --}}
+@php $b = $breakdown; $isCons = $tab === 'consultation-revenue'; @endphp
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:20px">
+    <div class="stat-card"><div class="stat-icon navy"><i class="fa-solid fa-receipt"></i></div><div><div class="stat-value">{{ $b['rows']->count() }}</div><div class="stat-label">{{ $isCons ? 'Consultations' : 'Billed Items' }}</div></div></div>
+    <div class="stat-card"><div class="stat-icon green"><i class="fa-solid fa-indian-rupee-sign"></i></div><div><div class="stat-value" style="color:var(--sc-green)">₹{{ number_format($b['total'],0) }}</div><div class="stat-label">{{ $isCons ? 'Consultation Revenue' : 'Services Revenue' }}</div></div></div>
+</div>
+@if(!$isCons)
+<div class="card mb-4">
+    <div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap;padding:12px 20px;align-items:center">
+        <span class="text-small text-muted" style="margin-right:4px">Category:</span>
+        <a href="?tab=services-revenue&from={{ $fromDate }}&to={{ $toDate }}&doctor_id={{ $doctorId }}" class="btn btn-sm {{ !$b['category'] ? 'btn-primary' : 'btn-outline' }}">All</a>
+        @foreach($b['types'] as $type)
+        <a href="?tab=services-revenue&from={{ $fromDate }}&to={{ $toDate }}&doctor_id={{ $doctorId }}&category={{ urlencode($type) }}" class="btn btn-sm {{ $b['category'] === $type ? 'btn-primary' : 'btn-outline' }}">{{ $type }}</a>
+        @endforeach
+    </div>
+</div>
+@endif
+<div style="display:grid;grid-template-columns:1fr 2fr;gap:20px;align-items:start">
+    <div class="card">
+        <div class="card-header"><i class="fa-solid fa-chart-simple"></i> {{ $isCons ? 'By Doctor' : 'By Category' }}</div>
+        <div class="table-wrap">
+            <table class="sc-table">
+                <thead><tr><th>{{ $isCons ? 'Doctor' : 'Category' }}</th><th class="text-right">Count</th><th class="text-right">Amount</th></tr></thead>
+                <tbody>
+                @forelse($isCons ? $b['byDoctor'] : $b['byType'] as $name => $g)
+                <tr><td class="fw-600">{{ $isCons && $name !== '—' ? 'Dr. '.$name : $name }}</td><td class="text-right text-muted">{{ $g['count'] }}</td><td class="text-right fw-600">₹{{ number_format($g['total'],0) }}</td></tr>
+                @empty
+                <tr><td colspan="3" class="text-center text-muted" style="padding:20px">—</td></tr>
+                @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <i class="fa-solid {{ $isCons ? 'fa-user-doctor' : 'fa-briefcase-medical' }}"></i> {{ $isCons ? 'Consultation' : 'Services' }} Revenue — {{ $rangeLabel }}
+            <div class="card-actions"><button onclick="window.print()" class="btn btn-sm btn-outline no-print"><i class="fa-solid fa-print"></i> Print</button></div>
+        </div>
+        <div class="table-wrap">
+            <table class="sc-table">
+                <thead><tr><th>Date</th><th>Bill No.</th><th>Patient</th>@if(!$isCons)<th>Category</th>@endif<th>Item</th><th>Doctor</th><th class="text-right">Amount</th></tr></thead>
+                <tbody>
+                @forelse($b['rows'] as $r)
+                <tr style="cursor:pointer" onclick="location='{{ route('billing.show', $r->bill_id) }}'">
+                    <td style="white-space:nowrap">{{ \Carbon\Carbon::parse($r->bill_date)->format('d M Y') }}</td>
+                    <td class="mono fw-600">{{ $r->bill_no }}</td>
+                    <td><div class="fw-600">{{ $r->patient }}</div><div class="text-small text-muted mono">{{ $r->jhc_id }}</div></td>
+                    @if(!$isCons)<td><span class="badge badge-navy">{{ $r->item_type }}</span></td>@endif
+                    <td class="text-small">{{ $r->item_name }}{{ $r->quantity > 1 ? ' ×'.rtrim(rtrim(number_format($r->quantity,2),'0'),'.') : '' }}</td>
+                    <td class="text-small">{{ $r->doctor ? 'Dr. '.$r->doctor : '—' }}</td>
+                    <td class="text-right fw-600">₹{{ number_format($r->total,0) }}</td>
+                </tr>
+                @empty
+                <tr><td colspan="{{ $isCons ? 6 : 7 }}" class="text-center text-muted" style="padding:30px">Nothing billed in this period.</td></tr>
+                @endforelse
+                </tbody>
+                @if($b['rows']->count())
+                <tfoot><tr style="font-weight:700;border-top:2px solid var(--sc-border)"><td colspan="{{ $isCons ? 5 : 6 }}">Total</td><td class="text-right">₹{{ number_format($b['total'],0) }}</td></tr></tfoot>
+                @endif
+            </table>
+        </div>
     </div>
 </div>
 @endif

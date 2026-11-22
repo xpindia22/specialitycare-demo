@@ -9,13 +9,14 @@
         <h1>New Echocardiography</h1>
         <div class="breadcrumb"><a href="{{ route('echo.index') }}">Echo</a> &rsaquo; New Record</div>
     </div>
+    @include('diagnostics._toolbar', ['inline'=>true])
 </div>
 
 <form method="POST" action="{{ route('echo.store') }}" enctype="multipart/form-data">
 @csrf
 <div class="row g-4">
 <div class="col-lg-9">
-    @include('echo._form', ['isEdit' => false, 'echo' => null, 'doctors' => $doctors, 'patients' => $patients, 'patient' => $patient ?? null])
+    @include('echo._form', ['isEdit' => false, 'echo' => null, 'doctors' => $doctors, 'patients' => $patients, 'patient' => $patient ?? null, 'referralSources' => $referralSources ?? collect()])
 </div>
 <div class="col-lg-3">
     <div class="card" style="position:sticky;top:80px">

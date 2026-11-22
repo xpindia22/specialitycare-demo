@@ -3,6 +3,8 @@
 @section('page-title', 'Ledger Statement')
 @section('content')
 
+@include('accounts._toolbar')
+
 <div class="page-header">
     <div class="page-header-left">
         <a href="{{ route('accounts.ledgers.index') }}" class="text-small"><i class="fa-solid fa-arrow-left"></i> Ledgers</a>

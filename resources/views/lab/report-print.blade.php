@@ -61,7 +61,24 @@
     <table class="results">
         <thead><tr><th>Test Name</th><th>Result</th><th>Normal Range</th><th>Unit</th><th>Flag</th><th>Remarks</th></tr></thead>
         <tbody>
-        @foreach($order->items as $item)
+        @php
+            // Group items by panel: each panel is a shaded title row followed by
+            // its member test rows; loose (individual) tests come last.
+            $itemGroups  = $order->items->groupBy(fn($it) => (int) ($it->lab_panel_id ?: 0));
+            $orderedKeys = $itemGroups->keys()->sortBy(fn($k) => $k === 0 ? 1 : 0)->values();
+        @endphp
+        @foreach($orderedKeys as $gKey)
+        @php $gItems = $itemGroups[$gKey]; $gPanel = $gKey ? optional($gItems->first())->panel : null; @endphp
+        @if($gPanel)
+        <tr><td colspan="6" style="background:#d6deea;color:#1f3a5f;font-weight:800;text-transform:uppercase;letter-spacing:.4px;font-size:11.5px;padding:7px 10px;border-top:2px solid #aebdd3">
+            {{ $gPanel->name }}{{ $gPanel->short_code ? ' · '.$gPanel->short_code : '' }}
+        </td></tr>
+        @elseif($orderedKeys->count() > 1)
+        <tr><td colspan="6" style="background:#eceff4;color:#475569;font-weight:700;text-transform:uppercase;letter-spacing:.4px;font-size:11px;padding:6px 10px;border-top:2px solid #dde2ea">
+            Individual Tests
+        </td></tr>
+        @endif
+        @foreach($gItems as $item)
         @php
             $flagCode = $item->abnormal_flag ?: 'N';
             $flagLabels = ['N'=>'Normal','H'=>'High','L'=>'Low','HH'=>'Critical High','LL'=>'Critical Low','POS'=>'Positive','NEG'=>'Negative','ABN'=>'Abnormal'];
@@ -76,15 +93,20 @@
             } elseif ($isLow) {
                 $valStyle = 'color:#0369a1;font-weight:700;';
             }
+            $res   = $item->results->first();
+            $range = $item->test?->normal_range ?: ($res->normal_range ?? null);
+            $unit  = $item->test?->unit ?: ($res->unit ?? null);
+            $name  = $item->test?->name ?? ($res->parameter_name ?? $item->panel?->name ?? '—');
         @endphp
         <tr>
-            <td style="font-weight:600{{ $isCritical ? ';font-weight:800' : '' }}">{{ $item->test?->name ?? $item->panel?->name ?? '—' }}</td>
+            <td style="padding-left:22px;font-weight:600{{ $isCritical ? ';font-weight:800' : '' }}">{{ $name }}</td>
             <td class="flag-{{ $flagCode }}" style="font-size:14px;{{ $valStyle }}">{{ $item->result_value ?: '—' }}</td>
-            <td>{{ $item->test?->normal_range ?: '—' }}</td>
-            <td>{{ $item->test?->unit ?: '—' }}</td>
+            <td>{{ $range ?: '—' }}</td>
+            <td>{{ $unit ?: '—' }}</td>
             <td class="flag-{{ $flagCode }}" style="{{ $isCritical ? 'font-weight:800' : '' }}">{{ $flagLabels[$flagCode] ?? 'Review' }}</td>
             <td style="font-size:11px;color:#64748b">{{ $item->remarks ?: '—' }}</td>
         </tr>
+        @endforeach
         @endforeach
         </tbody>
     </table>

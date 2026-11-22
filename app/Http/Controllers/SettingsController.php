@@ -18,7 +18,8 @@ class SettingsController extends Controller
         $departments         = \App\Models\Department::orderBy('name')->get();
         $allergensByCategory = \App\Models\Allergen::orderBy('category')->orderBy('sort_order')->orderBy('name')->get()->groupBy('category');
         $clinicalChipsByField = \App\Models\ClinicalChip::orderBy('field_key')->orderBy('sort_order')->orderBy('id')->get()->groupBy('field_key');
-        return view('settings.index', compact('settings','services','roomRents','labTests','activeLabTests','labCategories','labPanels','doctors','departments','allergensByCategory','clinicalChipsByField'));
+        $clinicalRules = \App\Models\ClinicalRule::orderBy('sort_order')->orderBy('id')->get();
+        return view('settings.index', compact('settings','services','roomRents','labTests','activeLabTests','labCategories','labPanels','doctors','departments','allergensByCategory','clinicalChipsByField','clinicalRules'));
     }
 
     public function update(Request $request) {
@@ -26,6 +27,8 @@ class SettingsController extends Controller
             'clinic_name','clinic_address','clinic_phone','clinic_email',
             'clinic_reg_no','clinic_gst','clinic_website',
             'jhc_id_prefix','jhc_id_padding','currency','footer_text',
+            // Sidebar "Recent Patients" list length (1..20)
+            'recent_patients_count',
             'shift_morning_start','shift_morning_end',
             'shift_evening_start','shift_evening_end',
             'shift_night_start','shift_night_end',
@@ -44,19 +47,40 @@ class SettingsController extends Controller
             'backup_notify_whatsapp_custom_hours',
             'backup_notify_email_frequency',
             'backup_notify_email_custom_hours',
+            // Flat referral incentive defaults — auto-credited to the referring
+            // doctor's incentive balance. ECG/Echo pay out every time; the
+            // consultation rate pays only on the patient's first-ever visit.
+            'referral_rate_ecg','referral_rate_echo','referral_rate_consultation_first',
+            // Buyer's own Anthropic API key for the AI Clinical Assistant —
+            // billed to the buyer, never the vendor's key.
+            'ai_assistant_api_key',
         ];
         foreach ($request->input('settings', []) as $key => $value) {
             if (in_array($key, $allowed)) {
                 if (str_ends_with($key, '_custom_hours')) {
                     $value = (string) max(1, min(168, (int) $value));
                 }
+                if ($key === 'recent_patients_count') {
+                    $value = (string) max(1, min(20, (int) $value));
+                }
+                if (str_starts_with($key, 'referral_rate_')) {
+                    $value = (string) max(0, (float) $value);
+                }
+                // The API key field is always rendered blank (never echo a
+                // saved secret back into the page source). A blank submit
+                // means "leave it unchanged", not "clear it".
+                if ($key === 'ai_assistant_api_key' && trim((string) $value) === '') {
+                    continue;
+                }
                 DB::table('settings')->updateOrInsert(
                     ['key' => $key],
-                    ['value' => $value, 'group' => 'clinic', 'updated_at' => now(), 'created_at' => now()]
+                    ['value' => $value, 'group' => $key === 'ai_assistant_api_key' ? 'ai_assistant' : 'clinic', 'updated_at' => now(), 'created_at' => now()]
                 );
             }
         }
-        return back()->with('success', 'Settings saved successfully.');
+        return back()
+            ->with('success', 'Settings saved successfully.')
+            ->with('settings_tab', $request->input('settings_tab', 'clinic'));
     }
 
     public function updateServicePrice(Request $request, ServiceCharge $service) {

@@ -45,6 +45,7 @@ class PatientController extends Controller
         ];
         $sort = $request->input('sort');
         $dir  = strtolower((string) $request->input('dir')) === 'asc' ? 'asc' : 'desc';
+        $query->orderByDesc('is_pinned');
         if (isset($sortMap[$sort])) {
             foreach ($sortMap[$sort] as $col) {
                 $query->orderBy($col, $dir);
@@ -118,8 +119,13 @@ class PatientController extends Controller
 
     public function show(Patient $patient)
     {
-        $encounters = $patient->encounters()->with('doctor', 'diagnoses')->latest('encounter_date')->paginate(10);
-        $appointments = $patient->appointments()->with('doctor')->latest('appointment_date')->take(5)->get();
+        $encounters = $patient->encounters()->with('doctor', 'diagnoses')->latest('encounter_date')->paginate(10)->fragment('tab-encounters');
+        $appointments    = $patient->appointments()->with('doctor')->latest('appointment_date')->take(5)->get();
+        $nextAppointment = $patient->appointments()->with('doctor')
+            ->where('appointment_date', '>=', today())
+            ->whereNotIn('status', ['Cancelled', 'No Show'])
+            ->orderBy('appointment_date')->orderBy('appointment_time')
+            ->first();
         $bills = $patient->bills()->latest('bill_date')->take(10)->get();
         $billSummary = [
             'total'   => $bills->sum('total_amount'),
@@ -138,9 +144,10 @@ class PatientController extends Controller
                     $diff   = today()->diffInDays($dueAt, false);
                     if ($diff <= 3) {
                         return [
-                            'name'   => $item->medicine?->name ?? $item->generic_name ?? 'Medication',
-                            'due_at' => $dueAt,
-                            'diff'   => $diff,
+                            'name'         => $item->medicine?->name ?? $item->generic_name ?? 'Medication',
+                            'due_at'       => $dueAt,
+                            'diff'         => $diff,
+                            'encounter_id' => $rx->encounter_id,
                         ];
                     }
                     return null;
@@ -259,7 +266,7 @@ class PatientController extends Controller
             ->orderBy('name')->get(['id', 'name']);
 
         return view('patients.show', compact(
-            'patient', 'encounters', 'appointments', 'bills', 'billSummary',
+            'patient', 'encounters', 'appointments', 'nextAppointment', 'bills', 'billSummary',
             'labOrders', 'prescriptions', 'ecgRecords', 'echoRecords',
             'admissions', 'currentAdmission', 'labTrends', 'vitalsTrends', 'patientTimeline',
             'refillAlerts', 'patientComms', 'commStaff'
@@ -387,6 +394,14 @@ class PatientController extends Controller
         $patient->save();
         ActivityLog::log('updated', ($patient->is_active ? 'Reactivated' : 'Marked inactive') . " patient {$patient->full_name} ({$patient->jhc_id})");
         return back()->with('success', $patient->is_active ? 'Patient reactivated.' : 'Patient marked inactive — kept in records, hidden from active lists.');
+    }
+
+    public function togglePin(Patient $patient)
+    {
+        abort_unless(auth()->user()?->can('patients.edit'), 403);
+        $patient->is_pinned = ! $patient->is_pinned;
+        $patient->save();
+        return back()->with('success', $patient->is_pinned ? "{$patient->full_name} pinned to top." : "{$patient->full_name} unpinned.");
     }
 
     public function search(Request $request)

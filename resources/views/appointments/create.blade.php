@@ -5,10 +5,12 @@
 @section('content')
 <div class="page-header">
     <div class="page-header-left"><h1>Book Appointment</h1></div>
+    @include('reception._toolbar', ['inline'=>true])
 </div>
 
 <form method="POST" action="{{ route('appointments.store') }}" id="appt-form">
 @csrf
+@if(request('referral_id') || old('referral_id'))<input type="hidden" name="referral_id" value="{{ old('referral_id', request('referral_id')) }}">@endif
 <div class="grid" style="grid-template-columns:1fr 320px;gap:20px;align-items:start">
 <div>
 
@@ -40,19 +42,35 @@
 <div class="card mb-3">
     <div class="card-header"><i class="fa-solid fa-user-doctor"></i> Doctor & Schedule</div>
     <div class="card-body">
-        <div class="form-row cols-2">
+        <div class="form-row cols-3">
+            <div class="form-group">
+                <label class="form-label">Speciality</label>
+                <select name="department_id" id="dept-select" class="form-control" onchange="filterDoctors()">
+                    <option value="">All specialities</option>
+                    @foreach($departments as $dep)
+                        <option value="{{ $dep->id }}" {{ old('department_id', request('department_id'))==$dep->id ? 'selected':'' }}>{{ $dep->name }}</option>
+                    @endforeach
+                </select>
+            </div>
             <div class="form-group">
                 <label class="form-label">Doctor <span class="req">*</span></label>
                 <select name="doctor_id" id="doctor-select" class="form-control select2" required style="width:100%" onchange="loadSlots()">
                     <option value="">Select Doctor</option>
                     @foreach($doctors as $d)
-                        <option value="{{ $d->id }}" {{ old('doctor_id', request('doctor_id'))==$d->id ? 'selected':'' }}>{{ $d->full_name }} — {{ $d->specialization }}</option>
+                        <option value="{{ $d->id }}" data-depts="{{ implode(',', $d->departmentIds()) }}" {{ old('doctor_id', request('doctor_id'))==$d->id ? 'selected':'' }}>{{ $d->full_name }} — {{ $d->specialization }}</option>
                     @endforeach
                 </select>
             </div>
             <div class="form-group">
                 <label class="form-label">Appointment Date <span class="req">*</span></label>
                 <input type="date" name="appointment_date" id="appt-date" class="form-control" value="{{ old('appointment_date', request('date', today()->toDateString())) }}" min="{{ today()->toDateString() }}" required onchange="loadSlots()">
+                @if(request('from_encounter') && request('date') && request('date') !== today()->toDateString())
+                    <div class="text-small" style="margin-top:6px;color:var(--sc-amber,#b45309)">
+                        <i class="fa-solid fa-circle-info"></i> Filled in with the follow-up date ({{ \Carbon\Carbon::parse(request('date'))->format('d M Y') }}).
+                        Seeing the patient today?
+                        <a href="#" onclick="var d=document.getElementById('appt-date');d.value='{{ today()->toDateString() }}';loadSlots();this.parentNode.style.display='none';return false;">Use today</a>
+                    </div>
+                @endif
             </div>
         </div>
 
@@ -95,7 +113,7 @@
         </div>
         <div class="form-group">
             <label class="form-label">Notes</label>
-            <textarea name="notes" class="form-control" rows="2">{{ old('notes') }}</textarea>
+            <textarea name="notes" class="form-control" rows="2">{{ old('notes', request('notes')) }}</textarea>
         </div>
     </div>
 </div>
@@ -161,6 +179,24 @@ const doctors = {!! json_encode($doctors->map(function($d) {
     ];
 })->values()) !!};
 
+// Speciality → only that department's doctors (primary or additional department)
+const allDoctorOptions = Array.from(document.querySelectorAll('#doctor-select option')).map(o => o.cloneNode(true));
+function filterDoctors() {
+    const dep = document.getElementById('dept-select').value;
+    const sel = document.getElementById('doctor-select');
+    const cur = sel.value;
+    sel.innerHTML = '';
+    allDoctorOptions.forEach(o => {
+        if (!o.value || !dep || (o.dataset.depts || '').split(',').includes(dep)) sel.appendChild(o.cloneNode(true));
+    });
+    const docs = Array.from(sel.options).filter(o => o.value);
+    sel.value = docs.some(o => o.value === cur) ? cur : (docs.length === 1 ? docs[0].value : '');
+    if (window.jQuery) jQuery(sel).trigger('change.select2');
+    loadSlots();
+}
+
+document.addEventListener('DOMContentLoaded', () => { if (document.getElementById('dept-select').value) filterDoctors(); });
+
 function loadSlots() {
     const doctorId = document.getElementById('doctor-select').value;
     const date     = document.getElementById('appt-date').value;
@@ -169,11 +205,16 @@ function loadSlots() {
 
     container.innerHTML = '<div class="text-muted small">Loading slots...</div>';
 
-    fetch(`{{ url('/appointments/slots') }}?doctor_id=${doctorId}&date=${date}`)
+    const deptId = document.getElementById('dept-select')?.value || '';
+    fetch(`{{ url('/appointments/slots') }}?doctor_id=${doctorId}&date=${date}&department_id=${deptId}`)
         .then(r => r.json())
         .then(data => { const slots = data.slots || data;
+            if (data.on_leave) {
+                container.innerHTML = `<div class="text-small" style="padding:12px;background:#fef2f2;color:#991b1b;border-radius:8px"><i class="fa-solid fa-plane-departure"></i> Doctor on leave this day (${data.on_leave}). Pick another date or doctor.</div>`;
+                return;
+            }
             if (!slots || !slots.length) {
-                container.innerHTML = '<div class="text-muted small">No slots available for this date.</div>';
+                container.innerHTML = '<div class="text-muted small">Doctor has no OPD' + (deptId ? ' for this speciality' : '') + ' on this day. Pick another date, or book anyway: the time is set automatically.</div>';
                 return;
             }
             container.innerHTML = slots.map(slot =>

@@ -7,6 +7,7 @@
         <a href="{{ route('packages.index') }}" class="btn btn-outline btn-sm me-2"><i class="fa-solid fa-arrow-left"></i></a>
         <h1>{{ isset($package->id) ? 'Edit' : 'New' }} Billing Package</h1>
     </div>
+    @include('billing._toolbar', ['inline'=>true])
 </div>
 
 @if($errors->any())

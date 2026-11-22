@@ -12,9 +12,10 @@ class TriageController extends Controller
     // Nursing Station — combined OPD queue + triage
     public function index()
     {
-        $doctors = Doctor::where('is_active', true)->orderBy('first_name')->get();
+        $doctors = Doctor::where('is_active', true)->with('departments')->orderBy('first_name')->get();
+        $departments = OpdController::opdDepartments();
 
-        $allToday = OpdToken::with('patient', 'doctor', 'triage')
+        $allToday = OpdToken::with('patient', 'doctor', 'triage', 'department')
             ->whereDate('token_date', today())
             ->orderBy('priority', 'desc')
             ->orderBy('token_no')
@@ -37,7 +38,7 @@ class TriageController extends Controller
             'done'           => $allToday->whereIn('status', ['done', 'skipped'])->count(),
         ];
 
-        return view('triage.index', compact('tokens', 'done', 'doctors', 'stats'));
+        return view('triage.index', compact('tokens', 'done', 'doctors', 'stats', 'departments'));
     }
 
     // Show triage form for a token

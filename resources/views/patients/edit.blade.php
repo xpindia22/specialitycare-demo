@@ -173,6 +173,19 @@
         <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
             <button type="submit" class="btn btn-primary btn-lg" style="width:100%;justify-content:center"><i class="fa-solid fa-save"></i> Save Changes</button>
             <a href="{{ route('patients.show', $patient) }}" class="btn btn-outline" style="width:100%;justify-content:center">Cancel</a>
+            <form method="POST" action="{{ route('patients.toggle-active', $patient) }}"
+                  onsubmit="return confirm('{{ $patient->is_active ? 'Mark this patient as INACTIVE? Their records are kept; they are just hidden from active lists.' : 'Reactivate this patient?' }}')">
+                @csrf
+                @if($patient->is_active)
+                    <button type="submit" class="btn btn-lg" style="width:100%;justify-content:center;background:#f59e0b;color:#fff;border:none;font-weight:600">
+                        <i class="fa-solid fa-user-slash"></i> Mark Inactive
+                    </button>
+                @else
+                    <button type="submit" class="btn btn-lg" style="width:100%;justify-content:center;background:#15803d;color:#fff;border:none;font-weight:600">
+                        <i class="fa-solid fa-user-check"></i> Reactivate Patient
+                    </button>
+                @endif
+            </form>
             @if(auth()->user()?->isOwner())
             {{-- Owner-only: Delete button submits the hidden form below via form="..." --}}
             <button type="submit" form="patient-delete-form" class="btn btn-lg"

@@ -4,22 +4,36 @@
 
 <div class="page-header">
     <div class="page-header-left">
-        <h1><i class="fa-solid fa-bed-pulse" style="color:var(--sc-teal)"></i> Live Bed Board</h1>
-        <div class="breadcrumb">Wards &rsaquo; Bed Board</div>
+        <h1><i class="fa-solid fa-bed-pulse" style="color:var(--sc-teal)"></i> {{ $isHistorical ? 'Bed Board' : 'Live Bed Board' }}</h1>
+        <div class="breadcrumb">Wards &rsaquo; Bed Board
+            @if($isHistorical) &middot; <strong>as of {{ $asOfDate->format('d M Y') }}</strong>
+            @else &middot; <span id="lastRefreshed">Updated just now</span> @endif
+        </div>
     </div>
-    <div style="display:flex;gap:8px;align-items:center">
-        <span style="font-size:12px;color:var(--sc-muted)" id="lastRefreshed">Updated just now</span>
-        <button onclick="location.reload()" class="btn btn-outline btn-sm">
-            <i class="fa-solid fa-rotate-right"></i> Refresh
-        </button>
-        <a href="{{ route('wards.index') }}" class="btn btn-outline btn-sm">
-            <i class="fa-solid fa-list"></i> Manage Wards
-        </a>
-    </div>
+    @include('ipd._toolbar', ['inline'=>true, 'extra' => [
+        ['url'=>'#', 'onclick'=>'location.reload();return false;', 'icon'=>'fa-rotate-right', 'label'=>'Refresh', 'bg'=>'#0f766e'],
+    ]])
 </div>
 
+{{-- As-of date selector --}}
+<form method="GET" class="no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+    <label class="text-small text-muted" style="align-self:center">Bed status as of</label>
+    <input type="date" name="date" value="{{ $asOf }}" max="{{ today()->toDateString() }}" class="form-control" style="width:160px">
+    <button type="submit" class="btn btn-primary btn-sm">View</button>
+    <a href="{{ route('wards.bed-board') }}" class="btn btn-outline btn-sm {{ !$isHistorical ? 'btn-primary' : '' }}"><i class="fa-solid fa-bolt"></i> Live (Today)</a>
+    <a href="{{ route('wards.bed-board', ['date'=>today()->subDay()->toDateString()]) }}" class="btn btn-outline btn-sm"><i class="fa-solid fa-calendar-minus"></i> Yesterday</a>
+    <a href="{{ route('wards.bed-board', ['date'=>today()->subDays(7)->toDateString()]) }}" class="btn btn-outline btn-sm"><i class="fa-solid fa-calendar-week"></i> Last Week</a>
+    <a href="{{ route('wards.bed-board', ['date'=>today()->subDays(30)->toDateString()]) }}" class="btn btn-outline btn-sm"><i class="fa-solid fa-calendar-days"></i> Last Month</a>
+</form>
+
+@if($isHistorical)
+<div class="alert no-print" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;padding:10px 14px;border-radius:6px;margin-bottom:16px">
+    <i class="fa-solid fa-clock-rotate-left"></i> Showing reconstructed occupancy <strong>as of {{ $asOfDate->format('d M Y') }}</strong> from admission history. Reserved / maintenance are live-only states and are not shown for past dates.
+</div>
+@endif
+
 {{-- Summary strip --}}
-<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px">
+<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:24px">
     <div class="stat-card">
         <div class="stat-icon navy"><i class="fa-solid fa-hospital"></i></div>
         <div><div class="stat-value">{{ $summary['total'] }}</div><div class="stat-label">Total Beds</div></div>
@@ -40,6 +54,10 @@
         <div class="stat-icon navy"><i class="fa-solid fa-wrench"></i></div>
         <div><div class="stat-value">{{ $summary['maintenance'] }}</div><div class="stat-label">Maintenance</div></div>
     </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#e0f2fe;color:#0369a1"><i class="fa-solid fa-broom"></i></div>
+        <div><div class="stat-value" style="color:#0369a1">{{ $summary['cleaning'] ?? 0 }}</div><div class="stat-label">Cleaning</div></div>
+    </div>
 </div>
 
 {{-- Occupancy bar --}}
@@ -58,6 +76,7 @@
         <span><span style="display:inline-block;width:8px;height:8px;background:var(--sc-red);border-radius:50%;margin-right:4px"></span>Occupied ({{ $summary['occupied'] }})</span>
         <span><span style="display:inline-block;width:8px;height:8px;background:var(--sc-amber);border-radius:50%;margin-right:4px"></span>Reserved ({{ $summary['reserved'] }})</span>
         <span><span style="display:inline-block;width:8px;height:8px;background:var(--sc-muted);border-radius:50%;margin-right:4px"></span>Maintenance ({{ $summary['maintenance'] }})</span>
+        <span><span style="display:inline-block;width:8px;height:8px;background:#0369a1;border-radius:50%;margin-right:4px"></span>Cleaning ({{ $summary['cleaning'] ?? 0 }})</span>
     </div>
 </div>
 @endif
@@ -82,7 +101,9 @@
 @foreach($wards as $ward)
 @php
     $wardAdmissions = $ward->beds->map(fn($b) => $admissions[$b->id] ?? null)->filter();
-    $longStay = $wardAdmissions->filter(fn($a) => \Carbon\Carbon::parse($a->admission_date)->diffInDays(now()) >= 6)->count();
+    $longStay = $wardAdmissions->filter(fn($a) => \Carbon\Carbon::parse($a->admission_date)->diffInDays($asOfDate) >= 6)->count();
+    $wardOccupied = $isHistorical ? $ward->beds->filter(fn($b) => isset($admissions[$b->id]))->count() : $ward->beds->where('status','occupied')->count();
+    $wardFree     = $isHistorical ? ($ward->beds->count() - $wardOccupied) : $ward->beds->where('status','available')->count();
 @endphp
 <div class="card mb-4">
     <div class="card-header">
@@ -96,8 +117,8 @@
         @endif
         <div class="card-actions">
             <span class="text-small text-muted">
-                {{ $ward->beds->where('status','available')->count() }} free /
-                {{ $ward->beds->where('status','occupied')->count() }} occupied /
+                {{ $wardFree }} free /
+                {{ $wardOccupied }} occupied /
                 {{ $ward->beds->count() }} total
             </span>
         </div>
@@ -111,7 +132,7 @@
             @php
                 $admission = $admissions[$bed->id] ?? null;
                 $days = $admission
-                    ? (\Carbon\Carbon::parse($admission->admission_date)->diffInDays(now()) + 1)
+                    ? (\Carbon\Carbon::parse($admission->admission_date)->diffInDays($asOfDate) + 1)
                     : 0;
 
                 if ($admission) {
@@ -129,13 +150,15 @@
                         'available'   => ['bg'=>'#f0fdf4','border'=>'#86efac','text'=>'#15803d','icon'=>'fa-circle-check'],
                         'reserved'    => ['bg'=>'#fffbeb','border'=>'#fcd34d','text'=>'#d97706','icon'=>'fa-clock'],
                         'maintenance' => ['bg'=>'#f9fafb','border'=>'#d1d5db','text'=>'#6b7280','icon'=>'fa-wrench'],
+                        'cleaning'    => ['bg'=>'#f0f9ff','border'=>'#7dd3fc','text'=>'#0369a1','icon'=>'fa-broom'],
                     ];
-                    $c = $statusColors[$bed->status] ?? $statusColors['available'];
+                    // Past dates: reserved/maintenance are live-only, so an empty bed reads as Available.
+                    $c = $isHistorical ? $statusColors['available'] : ($statusColors[$bed->status] ?? $statusColors['available']);
                 }
             @endphp
             <div class="bed-tile" style="background:{{ $c['bg'] }};border:1.5px solid {{ $c['border'] }};border-radius:10px;padding:12px;position:relative;min-height:100px;{{ $admission ? 'cursor:pointer;' : '' }}"
                  @if($admission) onclick="window.location='{{ route('admissions.show', $admission) }}'" @endif
-                 title="{{ $admission ? $admission->patient->full_name . ' — ' . $admission->ipd_no . ' · Day ' . $days : $bed->status_label }}">
+                 title="{{ $admission ? $admission->patient->full_name . ' — ' . $admission->ipd_no . ' · Day ' . $days : ($isHistorical ? 'Available' : $bed->status_label) }}">
 
                 {{-- Bed number + icon --}}
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
@@ -156,10 +179,17 @@
                 </span>
                 @else
                 <div style="font-size:11px;color:{{ $c['text'] }};font-weight:600;margin-top:4px">
-                    {{ $bed->status_label }}
+                    {{ $isHistorical ? 'Available' : $bed->status_label }}
                 </div>
                 @if($bed->type !== 'general')
                 <div style="font-size:10px;color:var(--sc-muted);margin-top:2px">{{ ucfirst($bed->type) }}</div>
+                @endif
+                @if(!$isHistorical && $bed->status === 'cleaning')
+                <form method="POST" action="{{ route('wards.beds.update', $bed) }}" style="margin-top:6px">
+                    @csrf @method('PATCH')
+                    <input type="hidden" name="status" value="available">
+                    <button class="btn btn-sm" style="background:#0369a1;color:#fff;padding:2px 8px;font-size:11px"><i class="fa-solid fa-check"></i> Mark clean</button>
+                </form>
                 @endif
                 @endif
             </div>

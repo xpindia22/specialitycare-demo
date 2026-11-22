@@ -118,7 +118,7 @@
         white-space: nowrap;
     }
 
-    /* User cell — wrap long full names like "Dr. Sample Admin" instead of overflowing */
+    /* User cell — wrap long full names like "Dr Robert James" instead of overflowing */
     .stock-register-table .user-cell {
         white-space: normal;
         overflow-wrap: anywhere;
@@ -247,6 +247,8 @@
 </style>
 @endpush
 @section('content')
+
+@include('pharmacy._toolbar')
 
 <div class="page-header stock-register-header">
     <div class="page-header-left">

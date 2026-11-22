@@ -306,8 +306,8 @@
         <div class="hosp-logo-area">
             <div class="hosp-logo-icon">&#10084;</div>
             <div>
-                <div class="hosp-name">Demo Clinic Pvt. Ltd.</div>
-                <div class="hosp-sub">{{ setting('clinic_address', 'Demo Clinic Pvt. Ltd.') }}</div>
+                <div class="hosp-name">James Heart Care Pvt. Ltd.</div>
+                <div class="hosp-sub">{{ setting('clinic_address', 'James Heart Care Pvt. Ltd.') }}</div>
             </div>
         </div>
         <div class="hosp-contact">
@@ -428,7 +428,7 @@
     <div class="section">
         <div class="section-header teal"><span>&#128197;</span> Follow-up Appointment</div>
         <div class="section-body">
-            <p>Please visit <strong>Demo Clinic Pvt. Ltd.</strong> for a follow-up appointment with <strong>{{ $admission->admittingDoctor->full_name }}</strong>.</p>
+            <p>Please visit <strong>James Heart Care Pvt. Ltd.</strong> for a follow-up appointment with <strong>{{ $admission->admittingDoctor->full_name }}</strong>.</p>
             <p style="margin-top:8px">Follow-up Date: <span style="border-bottom:1px solid #1a2942;min-width:140px;display:inline-block">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></p>
         </div>
     </div>
@@ -472,7 +472,7 @@
     <!-- Footer -->
     @if(setting('print_footer_enabled','1') !== '0')
     <div class="doc-footer">
-        Demo Clinic Pvt. Ltd. &nbsp;·&nbsp; {{ setting('clinic_address', '') }}<br>
+        James Heart Care Pvt. Ltd. &nbsp;·&nbsp; {{ setting('clinic_address', '') }}<br>
         These instructions are provided at the time of discharge. Please keep this document safe and bring it to every follow-up visit.
     </div>
     @endif

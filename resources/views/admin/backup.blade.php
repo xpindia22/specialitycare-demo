@@ -27,13 +27,26 @@
                 <x-empty-state compact icon="fa-database" title="No backups yet" message="Click Run Backup Now to create one." />
             </div>
         @else
+        <form method="POST" action="{{ route('admin.backup.delete') }}" id="backupDeleteForm"
+              onsubmit="return confirm('Delete ' + this.querySelectorAll('.bk-cb:checked').length + ' selected backup(s)? This cannot be undone.')">
+        @csrf
+        <div class="card-body" style="display:flex;align-items:center;gap:10px;padding-top:0">
+            <span class="text-small text-muted"><span id="bkCount">{{ $files->count() }}</span> saved backup(s) · <span id="bkSel">0</span> selected</span>
+            <button type="submit" id="bkDeleteBtn" class="btn btn-sm btn-danger" style="margin-left:auto" disabled>
+                <i class="fa-solid fa-trash"></i> Delete Selected
+            </button>
+        </div>
         <table class="sc-table">
             <thead>
-                <tr><th>File</th><th>Size</th><th>When</th><th></th></tr>
+                <tr>
+                    <th style="width:28px"><input type="checkbox" id="bkAll" title="Select all"></th>
+                    <th>File</th><th>Size</th><th>When</th><th></th>
+                </tr>
             </thead>
             <tbody>
             @foreach($files as $f)
             <tr>
+                <td><input type="checkbox" class="bk-cb" name="names[]" value="{{ $f->name }}"></td>
                 <td class="mono text-small">{{ $f->name }}</td>
                 <td>{{ number_format($f->size / 1024, 0) }} KB</td>
                 <td class="text-small">{{ $f->mtime->format('d M Y H:i') }} <span class="text-muted">({{ $f->mtime->diffForHumans() }})</span></td>
@@ -42,6 +55,20 @@
             @endforeach
             </tbody>
         </table>
+        </form>
+        <script>
+        (function () {
+            var all = document.getElementById('bkAll'), btn = document.getElementById('bkDeleteBtn'),
+                sel = document.getElementById('bkSel'), cbs = document.querySelectorAll('.bk-cb');
+            function sync() {
+                var n = document.querySelectorAll('.bk-cb:checked').length;
+                sel.textContent = n; btn.disabled = n === 0;
+                all.checked = n > 0 && n === cbs.length; all.indeterminate = n > 0 && n < cbs.length;
+            }
+            all.addEventListener('change', function () { cbs.forEach(function (c) { c.checked = all.checked; }); sync(); });
+            cbs.forEach(function (c) { c.addEventListener('change', sync); });
+        })();
+        </script>
         @endif
     </div>
 

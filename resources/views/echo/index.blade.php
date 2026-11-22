@@ -10,10 +10,11 @@
         <div class="breadcrumb">Filtered: {{ $filterPatient->full_name }} &nbsp;<a href="{{ route('echo.index') }}">Clear filter</a></div>
         @endif
     </div>
-    <a href="{{ route('echo.create') }}{{ isset($filterPatient) && $filterPatient ? '?patient_id='.$filterPatient->id : '' }}" class="btn btn-primary"><i class="fa-solid fa-plus"></i> New Echo</a>
-    @if(isset($filterPatient) && $filterPatient)
-    <a href="{{ route('patients.show', $filterPatient) }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Back to Patient</a>
-    @endif
+    @include('diagnostics._toolbar', ['inline'=>true, 'extra' => array_merge([
+        ['url'=>route('echo.create').(isset($filterPatient) && $filterPatient ? '?patient_id='.$filterPatient->id : ''), 'icon'=>'fa-plus', 'label'=>'New Echo', 'bg'=>'#047857'],
+    ], (isset($filterPatient) && $filterPatient) ? [
+        ['url'=>route('patients.show', $filterPatient), 'icon'=>'fa-arrow-left', 'label'=>'Back to Patient', 'bg'=>'#475569'],
+    ] : [])])
 </div>
 <form method="GET" action="{{ route('echo.index') }}" style="display:flex;gap:8px;margin-bottom:14px">
     @if(isset($filterPatient) && $filterPatient)<input type="hidden" name="patient_id" value="{{ $filterPatient->id }}">@endif

@@ -35,7 +35,7 @@
 
 @if(setting('print_header_enabled','1') !== '0')
 <div class="header">
-  <div class="clinic-name">{{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}</div>
+  <div class="clinic-name">{{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}</div>
   <div class="clinic-sub">{{ setting('clinic_address', '') }} | {{ setting('clinic_phone', '') }}</div>
 </div>
 @endif
@@ -157,7 +157,7 @@
 
 @if(setting('print_footer_enabled','1') !== '0')
 <div class="footer">
-  Generated on {{ now()->format('d M Y, h:i A') }} | {{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}
+  Generated on {{ now()->format('d M Y, h:i A') }} | {{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}
 </div>
 @endif
 </body>

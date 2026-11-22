@@ -29,12 +29,9 @@
     </div>
 </div>
 
-@if($errors->any())
-<div class="alert alert-danger">
-    <i class="fa-solid fa-circle-exclamation"></i>
-    <ul style="margin:0;padding-left:16px">@foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>
-</div>
-@endif
+{{-- checklist sits outside the discharge form (its sign-off buttons are forms of their own) --}}
+@php $outstanding = \App\Services\DischargeChecklist::outstanding($admission); @endphp
+@include('admissions._discharge-checklist')
 
 <form method="POST" action="{{ route('admissions.process-discharge', $admission) }}">
 @csrf @method('PUT')
@@ -143,13 +140,33 @@
 
         <div class="alert alert-warning">
             <i class="fa-solid fa-triangle-exclamation"></i>
-            Discharging will free Bed <strong>{{ $admission->bed->bed_number }}</strong> and mark it available.
+            Bed <strong>{{ $admission->bed->bed_number }}</strong> will go to <b>Cleaning</b>; mark it clean on the Bed Board to make it available.
         </div>
 
+        @if($outstanding)
+            @if(auth()->user()->isAdmin())
+            <div class="form-group">
+                <label class="form-label" style="color:#b45309">Override — checklist not complete ({{ count($outstanding) }} item{{ count($outstanding) > 1 ? 's' : '' }})</label>
+                <textarea name="discharge_override" id="discharge_override" class="form-control" rows="3" maxlength="300" placeholder="Type the reason here, e.g. LAMA, expired, bill on credit"
+                          @if($errors->has('checklist')) autofocus style="border:2px solid var(--sc-red);box-shadow:0 0 0 4px rgba(232,76,76,.2)" @endif>{{ old('discharge_override') }}</textarea>
+            </div>
+            <button type="submit" class="btn btn-amber" style="width:100%">
+                <i class="fa-solid fa-person-walking-arrow-right"></i> Discharge with override
+            </button>
+            @else
+            <button type="button" class="btn btn-amber" style="width:100%;opacity:.5;cursor:not-allowed" disabled title="Complete the discharge checklist first">
+                <i class="fa-solid fa-lock"></i> Complete the checklist to discharge
+            </button>
+            @endif
+        @else
         <button type="submit" class="btn btn-amber" style="width:100%">
             <i class="fa-solid fa-person-walking-arrow-right"></i> Confirm Discharge
         </button>
+        @endif
     </div>
+@if($errors->has('checklist'))
+<script>document.addEventListener('DOMContentLoaded', () => { const t = document.getElementById('discharge_override'); if (t) { t.scrollIntoView({block: 'center'}); t.focus(); } });</script>
+@endif
 </div>
 </form>
 <script>

@@ -7,6 +7,8 @@ use App\Models\EchoTemplate;
 use App\Models\EncounterReport;
 use App\Models\Patient;
 use App\Models\Doctor;
+use App\Models\ReferralSource;
+use App\Models\ReferralPayment;
 use App\Services\PatientNotifier;
 
 class EchoController extends Controller
@@ -76,7 +78,7 @@ class EchoController extends Controller
         $records = $query->paginate(20)->appends($request->only('patient_id','q'));
         $filterPatient = $request->patient_id ? Patient::find($request->patient_id) : null;
         $traceUploads = $request->patient_id
-            ? EncounterReport::with('encounter')->where('patient_id', $request->patient_id)->where('report_type', 'Echo File')->latest()->get()
+            ? EncounterReport::with('encounter')->whereHas('encounter')->where('patient_id', $request->patient_id)->where('report_type', 'Echo File')->latest()->get()
             : collect();
         return view('echo.index', compact('records','filterPatient','traceUploads','q'));
     }
@@ -87,7 +89,8 @@ class EchoController extends Controller
         $patient         = $request->patient_id ? Patient::find($request->patient_id) : null;
         $defaultDoctorId = Doctor::where('first_name','Robert')->where('last_name','James')->value('id') ?? 1;
         $templates       = EchoTemplate::orderBy('is_builtin','desc')->orderBy('category')->orderBy('name')->get();
-        return view('echo.create', compact('patients','doctors','patient','defaultDoctorId','templates'));
+        $referralSources = ReferralSource::where('is_active',true)->orderBy('name')->get();
+        return view('echo.create', compact('patients','doctors','patient','defaultDoctorId','templates','referralSources'));
     }
 
     /** Return all echo templates as JSON for live "Apply template" UI. */
@@ -155,8 +158,29 @@ class EchoController extends Controller
         }
         $echo = EchoRecord::create($data);
         $echo->load('patient');
+        $this->maybeCreateReferralIncentive($echo);
         ActivityLog::log('created', "Created Echo record {$echo->record_no} for patient {$echo->patient->full_name}");
         return redirect()->route('echo.show', $echo)->with('success','Echo record saved.');
+    }
+
+    /**
+     * Flat referral incentive for every Echo study referred in (rate configurable
+     * in Settings, default ₹500) — every time, unlike the one-time consultation bonus.
+     */
+    protected function maybeCreateReferralIncentive(EchoRecord $echo): void
+    {
+        if (!$echo->referral_source_id) return;
+        $rate = (float) setting('referral_rate_echo', 500);
+        if ($rate <= 0) return;
+        ReferralPayment::create([
+            'referral_source_id' => $echo->referral_source_id,
+            'patient_id'         => $echo->patient_id,
+            'calculated_amount'  => $rate,
+            'paid_amount'        => 0,
+            'status'             => 'pending',
+            'notes'              => "Auto Echo referral incentive for record {$echo->record_no}",
+            'created_by'         => auth()->id(),
+        ]);
     }
 
     public function destroyFile(EchoRecord $echo) {
@@ -190,9 +214,10 @@ class EchoController extends Controller
 
     public function edit(EchoRecord $echo) {
         $echo->load('patient','doctor');
-        $doctors   = Doctor::where('is_active',true)->orderBy('first_name')->get();
-        $templates = EchoTemplate::orderBy('is_builtin','desc')->orderBy('category')->orderBy('name')->get();
-        return view('echo.edit', compact('echo','doctors','templates'));
+        $doctors         = Doctor::where('is_active',true)->orderBy('first_name')->get();
+        $templates       = EchoTemplate::orderBy('is_builtin','desc')->orderBy('category')->orderBy('name')->get();
+        $referralSources = ReferralSource::where('is_active',true)->orderBy('name')->get();
+        return view('echo.edit', compact('echo','doctors','templates','referralSources'));
     }
 
     public function update(Request $request, EchoRecord $echo) {

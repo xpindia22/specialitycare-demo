@@ -2,42 +2,44 @@
 @extends('layouts.app')
 @section('title', $patient->full_name)
 @section('page-title', 'Patient Profile')
+@section('patient-context')
+<div class="sc-patient-bar" style="gap:10px">
+    <span class="spb-name">
+        <i class="fa-solid fa-circle-user"></i>
+        <a href="{{ route('patients.show', $patient) }}">{{ $patient->full_name }}</a>
+        <span class="spb-jhc">{{ $patient->jhc_id }}</span>
+    </span>
+    <div class="spb-actions">
+        @if($currentAdmission)
+            <a href="{{ route('admissions.show', $currentAdmission) }}" class="btn btn-navy"><i class="fa-solid fa-bed-pulse"></i> IPD: {{ $currentAdmission->ipd_no }}</a>
+        @else
+            <a href="{{ route('admissions.create', ['patient_id' => $patient->id]) }}" class="btn btn-navy"><i class="fa-solid fa-bed-pulse"></i> Admit to IPD</a>
+        @endif
+        <a href="{{ route('billing.create', ['patient_id' => $patient->id]) }}" class="btn btn-amber"><i class="fa-solid fa-file-invoice"></i> Create Bill</a>
+        <a href="{{ route('vaccinations.index', $patient) }}" class="btn btn-outline"><i class="fa-solid fa-syringe"></i> Vaccinations</a>
+        <a href="{{ route('glucose.index', $patient) }}" class="btn btn-outline"><i class="fa-solid fa-droplet"></i> Diabetes Diary</a>
+        <a href="{{ route('bp.index', $patient) }}" class="btn btn-outline"><i class="fa-solid fa-heart-pulse"></i> BP Diary</a>
+        <a href="{{ route('health.index', $patient) }}" class="btn btn-outline"><i class="fa-solid fa-heart"></i> Health Tracker</a>
+        @if($patient->date_of_birth)
+            <a href="{{ route('patients.growth', $patient) }}" class="btn btn-outline"><i class="fa-solid fa-chart-line"></i> Growth</a>
+        @endif
+        <a href="{{ route('patients.edit', $patient) }}" class="btn btn-outline"><i class="fa-solid fa-pen"></i> Edit</a>
+        @if(!empty($patient->phone) && app(\App\Services\LicenseService::class)->isEnabled('notifications'))
+            <button type="button" class="btn btn-outline" style="color:#25D366;border-color:#25D366" onclick="document.getElementById('wa-modal').style.display='flex'">
+                <i class="fa-brands fa-whatsapp"></i> WhatsApp
+            </button>
+        @endif
+    </div>
+</div>
+<style>
+.sc-patient-bar .spb-actions{display:flex;gap:6px;align-items:center;margin-left:auto;flex-wrap:nowrap}
+.sc-patient-bar .spb-actions .btn{padding:4px 9px;font-size:12px;white-space:nowrap;line-height:1.4}
+</style>
+@endsection
 @section('content')
 
-<div class="page-header">
-    <div class="page-header-left">
-        <h1>Patient Profile</h1>
-        <div class="breadcrumb"><a href="{{ route('patients.index') }}">Patients</a> › {{ $patient->jhc_id }}</div>
-    </div>
-    @if($currentAdmission)
-        <a href="{{ route('admissions.show', $currentAdmission) }}" class="btn btn-navy"><i class="fa-solid fa-bed-pulse"></i> IPD: {{ $currentAdmission->ipd_no }}</a>
-    @else
-        <a href="{{ route('admissions.create', ['patient_id' => $patient->id]) }}" class="btn btn-navy"><i class="fa-solid fa-bed-pulse"></i> Admit to IPD</a>
-    @endif
-    <a href="{{ route('appointments.create', ['patient_id' => $patient->id]) }}" class="btn btn-primary"><i class="fa-solid fa-calendar-plus"></i> Book Appointment</a>
-    <a href="{{ route('billing.create', ['patient_id' => $patient->id]) }}" class="btn btn-amber"><i class="fa-solid fa-file-invoice"></i> Create Bill</a>
-    <a href="{{ route('vaccinations.index', $patient) }}" class="btn btn-outline"><i class="fa-solid fa-syringe"></i> Vaccinations</a>
-    @if($patient->date_of_birth)
-        <a href="{{ route('patients.growth', $patient) }}" class="btn btn-outline"><i class="fa-solid fa-chart-line"></i> Growth</a>
-    @endif
-    <a href="{{ route('patients.edit', $patient) }}" class="btn btn-outline"><i class="fa-solid fa-pen"></i> Edit</a>
-    @if(auth()->user()->can('patients.edit'))
-    <form method="POST" action="{{ route('patients.toggle-active', $patient) }}" style="display:inline"
-          onsubmit="return confirm('{{ $patient->is_active ? 'Mark this patient as INACTIVE? Their records are kept; they are just hidden from active lists.' : 'Reactivate this patient?' }}')">
-        @csrf
-        @if($patient->is_active)
-            <button type="submit" class="btn btn-outline" style="color:#b45309;border-color:#f59e0b" title="Hide from active lists (keeps all records)"><i class="fa-solid fa-user-slash"></i> Mark Inactive</button>
-        @else
-            <button type="submit" class="btn btn-outline" style="color:#15803d;border-color:#86efac"><i class="fa-solid fa-user-check"></i> Reactivate</button>
-        @endif
-    </form>
-    @endif
-    @if(!empty($patient->phone) && app(\App\Services\LicenseService::class)->isEnabled('notifications'))
-        <button type="button" class="btn btn-outline" style="color:#25D366;border-color:#25D366" onclick="document.getElementById('wa-modal').style.display='flex'">
-            <i class="fa-brands fa-whatsapp"></i> WhatsApp
-        </button>
-    @endif
-</div>
+{{-- Patient Profile heading + breadcrumb removed; action buttons moved into the
+     sticky patient-context bar above (see @section('patient-context')). --}}
 
 @if(!empty($patient->phone) && app(\App\Services\LicenseService::class)->isEnabled('notifications'))
 <div id="wa-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;align-items:center;justify-content:center">
@@ -62,21 +64,34 @@
 @endif
 
 @if(isset($refillAlerts) && $refillAlerts->isNotEmpty())
-<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px 18px;margin-bottom:16px">
-    <div style="font-weight:700;color:#92400e;font-size:13px;margin-bottom:6px"><i class="fa-solid fa-triangle-exclamation"></i> Prescription Refill Due</div>
-    @foreach($refillAlerts as $alert)
-    <div style="font-size:13px;color:#78350f;margin-bottom:2px">
-        <i class="fa-solid fa-pills" style="margin-right:6px;color:#d97706"></i>
-        <strong>{{ $alert['name'] }}</strong> —
-        @if($alert['diff'] < 0)
-            <span style="color:#dc2626">Overdue by {{ abs($alert['diff']) }} day(s)</span>
-        @elseif($alert['diff'] === 0)
-            <span style="color:#dc2626">Due today</span>
-        @else
-            Due in {{ $alert['diff'] }} day(s) ({{ $alert['due_at']->format('d M Y') }})
-        @endif
+<div id="refill-alert-box" style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 18px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="var b=document.getElementById('refill-alert-body'),c=document.getElementById('refill-chevron'),open=b.style.display==='block';b.style.display=open?'none':'block';c.style.transform=open?'rotate(-90deg)':'rotate(0deg)';">
+        <div style="font-weight:700;color:#92400e;font-size:13px">
+            <i id="refill-chevron" class="fa-solid fa-chevron-down" style="margin-right:4px;font-size:11px;transition:transform .15s;transform:rotate(-90deg);display:inline-block"></i>
+            <i class="fa-solid fa-triangle-exclamation"></i> Prescription Refill Due ({{ $refillAlerts->count() }})
+        </div>
+        <button type="button" title="Dismiss" onclick="event.stopPropagation();document.getElementById('refill-alert-box').remove()" style="background:none;border:none;color:#92400e;cursor:pointer;font-size:14px;padding:0 4px;line-height:1">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
     </div>
-    @endforeach
+    <div id="refill-alert-body" style="display:none;margin-top:8px">
+        @foreach($refillAlerts as $alert)
+        <div style="font-size:13px;color:#78350f;margin-bottom:2px">
+            <i class="fa-solid fa-pills" style="margin-right:6px;color:#d97706"></i>
+            <strong>{{ $alert['name'] }}</strong> —
+            @if($alert['diff'] < 0)
+                <span style="color:#dc2626">Overdue by {{ abs($alert['diff']) }} day(s)</span>
+            @elseif($alert['diff'] === 0)
+                <span style="color:#dc2626">Due today</span>
+            @else
+                Due in {{ $alert['diff'] }} day(s) ({{ $alert['due_at']->format('d M Y') }})
+            @endif
+            @if(!empty($alert['encounter_id']))
+                <a href="{{ route('encounters.show', $alert['encounter_id']) }}" style="margin-left:6px;font-size:12px" title="Go to the visit this was prescribed in">View visit <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+            @endif
+        </div>
+        @endforeach
+    </div>
 </div>
 @endif
 
@@ -121,6 +136,9 @@
     <button class="tab-btn" data-tab="prescriptions"><i class="fa-solid fa-prescription"></i> Prescriptions</button>
     <button class="tab-btn" data-tab="labs"><i class="fa-solid fa-flask-vial"></i> Lab Orders</button>
     <button class="tab-btn" data-tab="ecg-echo"><i class="fa-solid fa-heart-pulse"></i> ECG / Echo</button>
+    <a class="tab-btn" href="{{ route('glucose.index', $patient) }}" style="text-decoration:none"><i class="fa-solid fa-droplet"></i> Diabetes Diary</a>
+    <a class="tab-btn" href="{{ route('bp.index', $patient) }}" style="text-decoration:none"><i class="fa-solid fa-heart-pulse"></i> BP Diary</a>
+    <a class="tab-btn" href="{{ route('health.index', $patient) }}" style="text-decoration:none"><i class="fa-solid fa-heart"></i> Health Tracker</a>
     <button class="tab-btn" data-tab="billing"><i class="fa-solid fa-file-invoice"></i> Billing</button>
     <button class="tab-btn" data-tab="ipd"><i class="fa-solid fa-bed-pulse"></i> IPD ({{ $admissions->count() }})</button>
     <button class="tab-btn" data-tab="timeline"><i class="fa-solid fa-timeline"></i> Timeline</button>
@@ -128,6 +146,27 @@
 
 <!-- OVERVIEW TAB -->
 <div id="tab-overview" class="tab-pane active">
+    @if($nextAppointment)
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div style="width:38px;height:38px;border-radius:10px;background:#dcfce7;display:flex;align-items:center;justify-content:center;color:#16a34a;font-size:16px;flex-shrink:0">
+            <i class="fa-solid fa-calendar-check"></i>
+        </div>
+        <div style="flex:1;min-width:0">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#16a34a;font-weight:700">Next Appointment</div>
+            <div style="font-weight:700;color:#14532d;font-size:14px">
+                {{ $nextAppointment->appointment_date->format('D, d M Y') }}
+                &nbsp;·&nbsp; {{ \Carbon\Carbon::parse($nextAppointment->appointment_time)->format('h:i A') }}
+                @if($nextAppointment->doctor)&nbsp;·&nbsp; Dr. {{ $nextAppointment->doctor->full_name }}@endif
+            </div>
+            @if($nextAppointment->chief_complaint)
+            <div style="font-size:12px;color:#166534;margin-top:2px">{{ $nextAppointment->chief_complaint }}</div>
+            @endif
+        </div>
+        <a href="{{ route('appointments.show', $nextAppointment) }}" class="btn btn-sm" style="background:#16a34a;color:#fff;border-color:#16a34a;white-space:nowrap">
+            <i class="fa-solid fa-eye"></i> View
+        </a>
+    </div>
+    @endif
     <div class="grid grid-2">
         <div class="card">
             <div class="card-header"><i class="fa-solid fa-user"></i> Personal Details</div>
@@ -892,21 +931,16 @@
 
 @push('scripts')
 <script>
-document.querySelectorAll('#patient-tabs .tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('#patient-tabs .tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-        location.hash = 'tab-' + btn.dataset.tab;
-    });
+window.scPatientVisitUrl = @json(route('appointments.create', ['patient_id' => $patient->id]));
+document.addEventListener('DOMContentLoaded', function() {
+    scTrackPatient({{ $patient->id }}, @json($patient->full_name), @json($patient->jhc_id), @json(route('patients.show', $patient)));
+    // Restore tab from URL hash
+    const hash = location.hash.replace('#','');
+    if (hash) {
+        const btn = document.querySelector(`#patient-tabs [data-tab="${hash.replace('tab-','')}"]`);
+        if (btn) btn.click();
+    }
 });
-// Restore tab from URL hash
-const hash = location.hash.replace('#','');
-if (hash) {
-    const btn = document.querySelector(`#patient-tabs [data-tab="${hash.replace('tab-','')}"]`);
-    if (btn) btn.click();
-}
 </script>
 @if((isset($vitalsTrends) && $vitalsTrends->count()) || (isset($labTrends) && $labTrends->count()))
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

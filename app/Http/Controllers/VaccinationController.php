@@ -48,6 +48,11 @@ class VaccinationController extends Controller
             ];
         });
 
+        // Show administered (given) vaccines on top, then the not-yet-given list
+        // (schedule order preserved within each group).
+        [$administered, $notGiven] = $rows->partition(fn ($r) => $r->status === 'given');
+        $rows = $administered->concat($notGiven)->values();
+
         return view('vaccinations.index', compact('patient', 'rows'));
     }
 
@@ -69,14 +74,15 @@ class VaccinationController extends Controller
             return back()->with('error', 'Unknown vaccine code.');
         }
 
+        $data['dose_label'] = ($data['dose_label'] ?? null) ?: ($schedule['dose'] ?? '');
+
         Vaccination::create($data + [
             'patient_id'   => $patient->id,
             'vaccine_name' => $schedule['name'],
-            'dose_label'   => $data['dose_label'] ?: $schedule['dose'],
             'given_by'     => auth()->id(),
         ]);
 
-        return back()->with('success', "{$schedule['name']} ({$schedule['dose']}) recorded.");
+        return back()->with('success', "{$schedule['name']} (" . ($schedule['dose'] ?? '') . ") recorded.");
     }
 
     public function destroy(Patient $patient, Vaccination $vaccination)

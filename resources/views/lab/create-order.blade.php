@@ -13,6 +13,7 @@
     @if(isset($admission) && $admission)
     <a href="{{ route('admissions.show', $admission) }}#tab-labs" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Back to Admission</a>
     @endif
+    @include('diagnostics._toolbar', ['inline'=>true])
 </div>
 
 @if(isset($admission) && $admission)

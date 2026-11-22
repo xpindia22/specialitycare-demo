@@ -10,7 +10,7 @@ return new class extends Migration {
         Schema::create('whatsapp_messages', function (Blueprint $table) {
             $table->id();
             $table->foreignId('patient_id')->nullable()->constrained('patients')->nullOnDelete();
-            $table->string('to_phone', 32);                  // E.164, e.g. +919000000000
+            $table->string('to_phone', 32);                  // E.164, e.g. +917432001215
             $table->string('kind', 40)->default('manual');   // appointment_confirm, appointment_reminder, followup, vaccination, billing, manual, test
             $table->text('body');
             $table->string('twilio_sid', 64)->nullable();    // SMxxxxxxxx returned by Twilio

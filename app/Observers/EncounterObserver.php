@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\Encounter;
+use App\Models\ReferralPayment;
 use App\Services\AdminNotifier;
 use App\Services\NotificationPreferenceService;
 
@@ -10,6 +11,8 @@ class EncounterObserver
 {
     public function created(Encounter $e): void
     {
+        $this->maybeCreateFirstConsultationReferralIncentive($e);
+
         if (!app(NotificationPreferenceService::class)->shouldSend('encounter_created', 'admin', 'email')) return;
         $e->loadMissing(['patient', 'doctor']);
         AdminNotifier::notify(
@@ -50,5 +53,30 @@ class EncounterObserver
             ])),
             "encounter_updated_{$e->id}"
         );
+    }
+
+    /**
+     * One-time referral bonus (rate configurable in Settings, default ₹100) —
+     * paid only on a patient's very first-ever consultation, system-wide.
+     * Later visits by the same patient (even via a different referral) never re-trigger this.
+     */
+    private function maybeCreateFirstConsultationReferralIncentive(Encounter $e): void
+    {
+        $patient = $e->patient ?? \App\Models\Patient::find($e->patient_id);
+        if (!$patient || !$patient->referral_source_id) return;
+        if (Encounter::where('patient_id', $e->patient_id)->count() > 1) return;
+
+        $rate = (float) setting('referral_rate_consultation_first', 100);
+        if ($rate <= 0) return;
+
+        ReferralPayment::create([
+            'referral_source_id' => $patient->referral_source_id,
+            'patient_id'         => $patient->id,
+            'calculated_amount'  => $rate,
+            'paid_amount'        => 0,
+            'status'             => 'pending',
+            'notes'              => "Auto first-consultation referral incentive (encounter {$e->encounter_no})",
+            'created_by'         => $e->created_by,
+        ]);
     }
 }

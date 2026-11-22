@@ -20,6 +20,8 @@ use App\Models\EchoRecord;
 use App\Models\EncounterNote;
 use App\Models\EncounterReport;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class EncounterController extends Controller
@@ -50,9 +52,12 @@ class EncounterController extends Controller
 
     public function show(Encounter $encounter)
     {
+        // A deleted visit is visible to the owner only, with its contents as they were
+        abort_if($encounter->trashed() && !auth()->user()?->isOwner(), 404);
+        $all = fn ($q) => $q->withoutGlobalScope('liveVisit');
         $encounter->load([
-            'patient', 'doctor', 'appointment', 'bill',
-            'diagnoses', 'prescriptions.items.medicine',
+            'patient', 'doctor', 'appointment', 'bill', 'deletedBy',
+            'diagnoses' => $all, 'prescriptions' => $all, 'prescriptions.items.medicine',
             'clinicalNotes', 'encounterNotes', 'labOrders.items',
             'reports.uploadedBy',
         ]);
@@ -103,14 +108,11 @@ class EncounterController extends Controller
             ->orderBy('category')->orderBy('name')
             ->get(['id','name','category','price']);
         $quickBillItems = [];
+        $feeQuote = null;
         if (!$encounter->bill) {
-            $visitType  = $encounter->visit_type ?? 'New Visit';
-            $svcName    = str_contains(strtolower($visitType), 'follow') ? 'Follow-up Consultation' : 'General Consultation';
-            $consultSvc = \App\Models\ServiceCharge::where('name', $svcName)->first()
-                       ?? \App\Models\ServiceCharge::where('category', 'Consultation')->first();
-            if ($consultSvc) {
-                $quickBillItems[] = ['name' => $consultSvc->name, 'type' => 'Consultation', 'price' => (float)$consultSvc->price, 'qty' => 1];
-            }
+            // Consultation fee from the OPD fee rules (free / follow-up window, discounts)
+            $feeQuote = \App\Services\OpdFee::quote($encounter->patient, $encounter->doctor, \App\Services\OpdFee::departmentOf($encounter), $encounter->encounter_date, $encounter);
+            $quickBillItems[] = \App\Services\OpdFee::billItem($feeQuote, $encounter->doctor);
             foreach ($encounter->labOrders as $lo) {
                 foreach ($lo->items as $item) {
                     $name  = $item->test?->name ?? $item->panel?->name ?? 'Lab Test';
@@ -124,10 +126,17 @@ class EncounterController extends Controller
 
         $rxOptions = \App\Models\RxOption::grouped();
 
+        // OPD referrals: the one that brought this visit, the ones made from it, and the refer form's lists
+        $referralFrom = \App\Models\OpdReferral::forEncounter($encounter);
+        $referralsMade = $encounter->referralsMade()->with(['toDepartment', 'toDoctor', 'token'])->latest('id')->get();
+        $referDepartments = OpdController::opdDepartments();
+        $referDoctors = \App\Models\Doctor::where('is_active', true)->with('departments')->orderBy('first_name')->get();
+
         return view('encounters.show', compact(
+            'referralFrom', 'referralsMade', 'referDepartments', 'referDoctors',
             'encounter', 'medicines', 'labTests', 'labPanels', 'patientAllergies', 'activePrescribedMeds',
             'patientAllergyRecords', 'commonAllergens', 'patientEcgRecords', 'patientEchoRecords',
-            'services', 'quickBillItems', 'clinicalChips', 'rxOptions'
+            'services', 'quickBillItems', 'feeQuote', 'clinicalChips', 'rxOptions'
         ));
     }
 
@@ -146,6 +155,26 @@ class EncounterController extends Controller
             ['label' => $value, 'sort' => 999]
         );
         return response()->json(['value' => $opt->value, 'label' => $opt->label ?: $opt->value]);
+    }
+
+    /** Pin / unpin a diary drug to the top of its picker (diabetes_med / bp_med). */
+    public function pinRxOption(Request $request)
+    {
+        $data = $request->validate([
+            'field' => ['required', \Illuminate\Validation\Rule::in(\App\Models\RxOption::PINNABLE_FIELDS)],
+            'value' => 'required|string|max:191',
+        ]);
+        $value = trim($data['value']);
+        abort_if($value === '', 422, 'Empty value.');
+
+        $opt = \App\Models\RxOption::firstOrCreate(
+            ['field' => $data['field'], 'value' => $value],
+            ['label' => $value, 'sort' => 999]
+        );
+        $opt->is_pinned = ! $opt->is_pinned;
+        $opt->save();
+
+        return response()->json(['value' => $opt->value, 'pinned' => (bool) $opt->is_pinned]);
     }
 
     public function updateVitals(Request $request, Encounter $encounter)
@@ -170,7 +199,9 @@ class EncounterController extends Controller
 
         $encounter->update($validated);
         $encounter->load('patient');
-        ActivityLog::log('updated', "Updated vitals for patient {$encounter->patient->first_name} {$encounter->patient->last_name} (Encounter #{$encounter->id})");
+        if (self::shouldLogSave($request, 'vitals', $encounter->id)) {
+            ActivityLog::log('updated', "Updated vitals for patient {$encounter->patient->first_name} {$encounter->patient->last_name} (Encounter #{$encounter->id})" . ($request->boolean('autosave') ? ' [auto-save]' : ''));
+        }
         return response()->json(['success' => true, 'bmi' => $encounter->bmi]);
     }
 
@@ -201,8 +232,102 @@ class EncounterController extends Controller
 
         $encounter->update($validated);
         $encounter->load('patient');
-        ActivityLog::log('updated', "Updated clinical notes for patient {$encounter->patient->first_name} {$encounter->patient->last_name} (Encounter #{$encounter->id})");
+        if (self::shouldLogSave($request, 'clinical', $encounter->id)) {
+            ActivityLog::log('updated', "Updated clinical notes for patient {$encounter->patient->first_name} {$encounter->patient->last_name} (Encounter #{$encounter->id})" . ($request->boolean('autosave') ? ' [auto-save]' : ''));
+        }
         return response()->json(['success' => true]);
+    }
+
+    /** Auto-save posts every 3 s while typing: log those at most once per 10 minutes per encounter and section. */
+    public static function shouldLogSave(Request $request, string $section, int $encounterId): bool
+    {
+        return !$request->boolean('autosave') || Cache::add("autosave-log:{$section}:{$encounterId}", 1, 600);
+    }
+
+    /** Sections of Clinical History & Examination that can be printed (code => label), in print order. */
+    public const CLINICAL_PRINT_SECTIONS = [
+        'chief_complaint'            => 'Chief Complaint',
+        'history_of_present_illness' => 'History of Present Illness',
+        'past_medical_history'       => 'Past Medical History',
+        'family_history'             => 'Family History',
+        'allergies'                  => 'Allergies',
+        'social_history'             => 'Social History',
+        'examination_findings'       => 'Examination',
+        'impression'                 => 'Impression / Differential Diagnosis',
+        'diagnoses'                  => 'Diagnoses',
+        'plan'                       => 'Plan',
+        'prescriptions'              => 'Prescriptions',
+        'follow_up'                  => 'Follow-up',
+    ];
+
+    /**
+     * Print all or some clinical sections: ?s=chief_complaint,social_history (none = all).
+     * ?all=1 prints every visit of this patient, oldest first (?order=desc for newest first).
+     */
+    public function printClinical(Request $request, Encounter $encounter)
+    {
+        $encounter->loadMissing(['patient', 'doctor']);
+        $wanted = array_filter(explode(',', (string) $request->query('s', '')));
+        $codes = array_keys(self::CLINICAL_PRINT_SECTIONS);
+        if ($wanted) $codes = array_values(array_intersect($codes, $wanted));
+
+        $allVisits = $request->boolean('all');
+        $desc = $request->query('order') === 'desc';
+        $encounters = $allVisits
+            ? Encounter::with(['doctor', 'diagnoses', 'prescriptions.items.medicine'])
+                ->where('patient_id', $encounter->patient_id)
+                ->orderBy('encounter_date', $desc ? 'desc' : 'asc')->orderBy('id', $desc ? 'desc' : 'asc')
+                ->get()
+            : collect([$encounter->load(['diagnoses', 'prescriptions.items.medicine'])]);
+
+        // Allergies live on the patient, not the visit: same list for every visit.
+        $allergyRows = $encounter->patient->patientAllergies()->orderBy('allergen')->get();
+        $allergyHtml = $allergyRows->map(fn ($a) => '<li>' . e($a->allergen) . ($a->severity && $a->severity !== 'unknown' ? ' (' . e($a->severity) . ')' : '') . '</li>')->implode('');
+        $allergyHtml = $allergyHtml ? "<ul>{$allergyHtml}</ul>" : '';
+
+        $visits = $encounters->map(fn ($enc) => [
+            'encounter' => $enc,
+            'sections'  => $this->clinicalPrintSections($enc, $codes, $allergyHtml),
+        ]);
+
+        return view('encounters.clinical-print', compact('encounter', 'visits', 'allVisits'));
+    }
+
+    /** [['label' => .., 'html' => ..], ...] for one visit; html is sanitised. */
+    private function clinicalPrintSections(Encounter $enc, array $codes, string $allergyHtml): array
+    {
+        // Quill HTML: keep only basic formatting tags, drop every attribute.
+        $clean = function (?string $html) {
+            $html = strip_tags((string) $html, '<p><br><strong><b><em><i><u><ul><ol><li>');
+            $html = preg_replace('/<(\/?)(\w+)[^>]*>/', '<$1$2>', $html);
+            return trim(strip_tags($html)) === '' ? '' : $html;
+        };
+
+        $sections = [];
+        foreach ($codes as $code) {
+            if ($code === 'allergies') {
+                $html = $allergyHtml;
+            } elseif ($code === 'diagnoses') {
+                $html = $enc->diagnoses->map(fn ($d) => '<li>' . e($d->diagnosis_name) . ($d->icd_code ? ' <span class="muted">(' . e($d->icd_code) . ')</span>' : '') . ' — ' . e($d->type) . ', ' . e($d->status) . '</li>')->implode('');
+                $html = $html ? "<ul>{$html}</ul>" : '';
+            } elseif ($code === 'prescriptions') {
+                $html = '';
+                foreach ($enc->prescriptions as $rx) {
+                    $items = $rx->items->map(fn ($it) => '<li><strong>' . e($it->medicine->name ?? '') . '</strong> ' . e(implode(' · ', array_filter([$it->dose, $it->frequency, $it->route, $it->duration_days ? $it->duration_days . ' days' : null]))) . ($it->instructions ? ' — ' . e($it->instructions) : '') . '</li>')->implode('');
+                    if ($items) $html .= "<ul>{$items}</ul>";
+                    if (trim((string) $rx->advice) !== '') $html .= '<p><strong>Advice:</strong> ' . e($rx->advice) . '</p>';
+                }
+            } elseif ($code === 'follow_up') {
+                $parts = [];
+                if ($enc->follow_up_date) $parts[] = '<p><strong>Next visit:</strong> ' . e($enc->follow_up_date->format('d M Y')) . '</p>';
+                if (trim((string) $enc->follow_up_instructions) !== '') $parts[] = '<p>' . nl2br(e($enc->follow_up_instructions)) . '</p>';
+                $html = implode('', $parts);
+            } else {
+                $html = $clean($enc->{$code});
+            }
+            $sections[] = ['label' => self::CLINICAL_PRINT_SECTIONS[$code], 'html' => $html];
+        }
+        return $sections;
     }
 
     public function saveDiagnoses(Request $request, Encounter $encounter)
@@ -215,18 +340,54 @@ class EncounterController extends Controller
             'diagnoses.*.status'    => 'required|in:Active,Resolved,Chronic',
         ]);
 
-        $encounter->diagnoses()->delete();
-        foreach ($request->diagnoses as $diag) {
-            $encounter->diagnoses()->create([
-                'icd_code'       => $diag['icd_code'] ?? null,
-                'diagnosis_name' => $diag['name'],
-                'type'           => $diag['type'],
-                'status'         => $diag['status'] ?? 'Active',
-                'notes'          => $diag['notes'] ?? null,
-            ]);
-        }
+        // All-or-nothing: auto-save replaces the list every few seconds while editing.
+        DB::transaction(function () use ($request, $encounter) {
+            $encounter->diagnoses()->delete();
+            foreach ($request->diagnoses as $diag) {
+                $encounter->diagnoses()->create([
+                    'icd_code'       => $diag['icd_code'] ?? null,
+                    'diagnosis_name' => $diag['name'],
+                    'type'           => $diag['type'],
+                    'status'         => $diag['status'] ?? 'Active',
+                    'notes'          => $diag['notes'] ?? null,
+                ]);
+            }
+        });
 
         return response()->json(['success' => true, 'count' => count($request->diagnoses)]);
+    }
+
+    /**
+     * Suggested blood tests / investigations for this encounter, based on its
+     * (just-saved) diagnoses, the patient's age, chief complaint, and current
+     * medicines. Rule-based baseline always runs; the AI layer (medication
+     * side-effect / nuanced additions) is best-effort and silently skipped if
+     * unavailable. Never places an order — the doctor reviews/edits/places it
+     * from the Labs tab, same as the existing template-driven suggestion card.
+     */
+    public function suggestInvestigations(Encounter $encounter, \App\Services\InvestigationSuggester $suggester)
+    {
+        $encounter->load('diagnoses', 'patient');
+
+        $rules = $suggester->suggestFromRules($encounter);
+        $ai = $suggester->suggestFromAi($encounter, $rules['tests'], $rules['panels'], $rules['procedures']);
+
+        $panels = array_values(array_unique(array_merge($rules['panels'], $ai['panels'] ?? [])));
+        $tests = array_values(array_unique(array_merge($rules['tests'], $ai['tests'] ?? [])));
+        $procedureNames = array_values(array_unique(array_merge($rules['procedures'], $ai['procedures'] ?? [])));
+
+        $procedures = collect($procedureNames)->map(fn ($name) => [
+            'name' => $name,
+            'url' => route(\App\Services\InvestigationSuggester::PROCEDURE_ROUTES[$name], ['patient_id' => $encounter->patient_id]),
+        ])->values();
+
+        return response()->json([
+            'panels' => $panels,
+            'tests' => $tests,
+            'procedures' => $procedures,
+            'ai_used' => $ai !== null,
+            'reasons' => $ai['reasons'] ?? [],
+        ]);
     }
 
     public function savePrescription(Request $request, Encounter $encounter)
@@ -403,6 +564,174 @@ class EncounterController extends Controller
         return redirect()->route('encounters.show', $encounter)
             ->with('success', $msg)
             ->with('encounter_completed', $encounter->id);
+    }
+
+    /**
+     * Records that stop a visit from being deleted: they carry money or test results
+     * of their own, so they must be deleted (or moved) on their own pages first.
+     */
+    public static function deleteBlockers(Encounter $encounter): array
+    {
+        $blockers = [];
+        if ($bill = $encounter->bill) $blockers[] = "bill {$bill->bill_no}";
+        foreach (['lab_orders' => 'lab order', 'ecg_records' => 'ECG', 'echo_records' => 'echo'] as $table => $label) {
+            $n = DB::table($table)->where('encounter_id', $encounter->id)->count();
+            if ($n) $blockers[] = $n . ' ' . $label . ($n > 1 ? 's' : '');
+        }
+        return $blockers;
+    }
+
+    /** Follow-up appointment auto-booked when this visit was completed, if still pending. */
+    public static function autoFollowUpOf(Encounter $encounter): ?Appointment
+    {
+        return Appointment::where('patient_id', $encounter->patient_id)
+            ->where('doctor_id', $encounter->doctor_id)
+            ->where('booking_source', 'auto_follow_up')
+            ->whereIn('status', ['Scheduled', 'Confirmed'])
+            ->where('created_at', '>=', $encounter->created_at)
+            ->whereDate('appointment_date', '>=', $encounter->encounter_date)
+            ->orderBy('appointment_date')
+            ->first();
+    }
+
+    /**
+     * Delete (hide) a visit entered by mistake, e.g. a duplicate. Allowed for the owner
+     * and staff given "Can delete visits". Nothing is removed: the visit and everything
+     * in it vanish from lists and reports, and the owner can view, restore or
+     * permanently delete it under Deleted Visits. Optionally cancels the follow-up
+     * appointment this visit auto-booked.
+     */
+    public function destroy(Request $request, Encounter $encounter)
+    {
+        abort_unless(auth()->user()?->canDeleteVisits(), 403, 'You are not allowed to delete visits.');
+        $request->validate(['reason' => 'required|string|max:255']);
+
+        if ($blockers = self::deleteBlockers($encounter)) {
+            return back()->with('error', "Visit {$encounter->encounter_no} still has " . implode(', ', $blockers)
+                . '. Delete or move ' . (count($blockers) > 1 ? 'them' : 'it') . ' first, then delete the visit.');
+        }
+
+        $encounter->load('patient');
+        $followUp = $request->boolean('cancel_follow_up') ? self::autoFollowUpOf($encounter) : null;
+        $sourceAppt = $request->boolean('cancel_appointment') ? self::sourceAppointmentOf($encounter) : null;
+
+        DB::transaction(function () use ($request, $encounter, $followUp, $sourceAppt) {
+            $encounter->forceFill(['deleted_by' => auth()->id(), 'delete_reason' => $request->reason])->save();
+            $encounter->delete();
+            $followUp?->update(['status' => 'Cancelled']);
+            // The appointment the visit was started from: cancel it so it leaves the appointments list;
+            // the old status is kept in the note so restoring the visit can put it back.
+            $sourceAppt?->update([
+                'status' => 'Cancelled',
+                'notes'  => trim($sourceAppt->notes . "\n" . self::VISIT_DELETED_NOTE . " {$encounter->encounter_no} (status was {$sourceAppt->status}): {$request->reason}"),
+            ]);
+        });
+
+        $extra = ($followUp ? "; cancelled follow-up {$followUp->appointment_no} ({$followUp->appointment_date->toDateString()})" : '')
+            . ($sourceAppt ? "; cancelled appointment {$sourceAppt->appointment_no}" : '');
+        ActivityLog::log('deleted', "Deleted visit {$encounter->encounter_no} of {$encounter->patient->full_name} dated "
+            . "{$encounter->encounter_date->toDateString()} — reason: {$request->reason}{$extra}");
+
+        return redirect()->route('patients.show', $encounter->patient)
+            ->with('success', "Visit {$encounter->encounter_no} deleted."
+                . ($sourceAppt ? " Appointment {$sourceAppt->appointment_no} removed from the appointments list." : '')
+                . ($followUp ? " Follow-up {$followUp->appointment_no} cancelled." : ''));
+    }
+
+    /** Marker written into an appointment's notes when deleting its visit cancels it. */
+    public const VISIT_DELETED_NOTE = '[Visit deleted]';
+
+    /** The appointment this visit was started from, if no other (live) visit uses it and it is still open. */
+    public static function sourceAppointmentOf(Encounter $encounter): ?Appointment
+    {
+        $appt = $encounter->appointment;
+        if (!$appt || in_array($appt->status, ['Cancelled', 'No-Show', 'Rescheduled'])) return null;
+        $othersUseIt = Encounter::where('appointment_id', $appt->id)->where('id', '!=', $encounter->id)->exists();
+        return $othersUseIt ? null : $appt;
+    }
+
+    /** Deleted Visits: owner only. */
+    public function deleted(Request $request)
+    {
+        abort_unless(auth()->user()?->isOwner(), 403);
+        $q = $request->get('q');
+        $encounters = Encounter::onlyTrashed()->with('patient', 'doctor', 'deletedBy')
+            ->when($q, fn($query) => $query->where(fn($w) => $w->where('encounter_no', 'like', "%$q%")
+                ->orWhereHas('patient', fn($p) => $p->where('first_name', 'like', "%$q%")
+                    ->orWhere('last_name', 'like', "%$q%")
+                    ->orWhere('jhc_id', 'like', "%$q%"))))
+            ->orderByDesc('deleted_at')->paginate(25)->withQueryString();
+        return view('encounters.deleted', compact('encounters', 'q'));
+    }
+
+    /** Bring a deleted visit back exactly as it was. Owner only. */
+    public function restore(Encounter $encounter)
+    {
+        abort_unless(auth()->user()?->isOwner(), 403);
+        abort_unless($encounter->trashed(), 404);
+        $encounter->restore();
+        $encounter->forceFill(['deleted_by' => null, 'delete_reason' => null])->save();
+
+        // Put back the appointment that deleting this visit cancelled.
+        $appt = $encounter->appointment;
+        $reopened = '';
+        if ($appt && $appt->status === 'Cancelled'
+            && preg_match_all('/' . preg_quote(self::VISIT_DELETED_NOTE, '/') . ' ' . preg_quote($encounter->encounter_no, '/') . ' \(status was ([A-Za-z-]+)\)/', (string) $appt->notes, $m)) {
+            $appt->update(['status' => end($m[1]), 'notes' => trim($appt->notes . "\nVisit {$encounter->encounter_no} restored")]);
+            $reopened = " Appointment {$appt->appointment_no} is back as " . end($m[1]) . '.';
+        }
+
+        ActivityLog::log('updated', "Restored deleted visit {$encounter->encounter_no} of {$encounter->patient->full_name}" . ($reopened ? "; reopened appointment {$appt->appointment_no}" : ''));
+        return redirect()->route('encounters.show', $encounter)->with('success', "Visit {$encounter->encounter_no} restored.{$reopened}");
+    }
+
+    /**
+     * Permanently remove a deleted visit. Owner only, from Deleted Visits.
+     * Removed with it: diagnoses, prescriptions, notes, uploaded reports (and their files).
+     * Vitals, diet and radiology entries stay in the patient's history, unlinked.
+     * Optionally also removes the appointment / OPD token it came from.
+     */
+    public function forceDestroy(Request $request, Encounter $encounter)
+    {
+        abort_unless(auth()->user()?->isOwner(), 403, 'Only the clinic owner can permanently delete visits.');
+        abort_unless($encounter->trashed(), 404);
+
+        $encounter->load('patient', 'appointment', 'opdToken', 'reports');
+        $removed = [];
+        $files   = $encounter->reports->pluck('file_path')->filter()->all();
+
+        DB::transaction(function () use ($request, $encounter, &$removed) {
+            DB::table('clinical_notes')->where('encounter_id', $encounter->id)->delete();
+            $appt  = $encounter->appointment;
+            $token = $encounter->opdToken;
+            $encounter->forceDelete(); // diagnoses, prescriptions (+items), notes, reports cascade
+
+            // Only if no other visit (deleted or not) still uses them
+            if ($request->boolean('delete_appointment') && $appt && !Encounter::withTrashed()->where('appointment_id', $appt->id)->exists()) {
+                if (Appointment::where('rescheduled_from', $appt->id)->exists()) {
+                    $appt->update(['status' => 'Cancelled']);
+                    $removed[] = "cancelled appointment {$appt->appointment_no}";
+                } else {
+                    $appt->delete();
+                    $removed[] = "deleted appointment {$appt->appointment_no}";
+                }
+            }
+            if ($request->boolean('delete_token') && $token && !Encounter::withTrashed()->where('opd_token_id', $token->id)->exists()) {
+                $token->delete(); // triage cascades
+                $removed[] = "deleted OPD token #{$token->id}";
+            }
+        });
+
+        foreach ($files as $f) {
+            $path = public_path('storage/' . $f);
+            if (is_file($path)) @unlink($path);
+        }
+
+        ActivityLog::log('deleted', "Permanently deleted visit {$encounter->encounter_no} of {$encounter->patient->full_name} dated {$encounter->encounter_date->toDateString()}"
+            . ($removed ? '; ' . implode('; ', $removed) : ''));
+
+        return redirect()->route('encounters.deleted')
+            ->with('success', "Visit {$encounter->encounter_no} permanently deleted." . ($removed ? ' Also ' . implode(', ', $removed) . '.' : ''));
     }
 
     /**

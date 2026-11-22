@@ -51,7 +51,7 @@
       <div class="card-header">
         <i class="fa-solid fa-money-bill-transfer"></i> Incentive Payments
         <div class="card-actions">
-          <button class="btn btn-sm btn-primary" onclick="document.getElementById('payModal').classList.add('open')">
+          <button class="btn btn-sm btn-primary" onclick="openNewPayRecord()">
             <i class="fa-solid fa-plus"></i> Record Payment
           </button>
         </div>
@@ -154,10 +154,23 @@
     <form method="POST" action="{{ route('referrals.payment') }}">
     @csrf
     <input type="hidden" name="referral_payment_id" id="modalPayId">
+    <input type="hidden" name="referral_source_id" value="{{ $source->id }}">
     <div class="modal-body">
+      <div id="modalPayNewNotice" class="alert alert-info" style="display:none;font-size:12.5px;margin-bottom:14px">
+        <i class="fa-solid fa-circle-info"></i> No pending incentive entry was found for this source — this will record a new payment in retrospect (not linked to a specific bill).
+      </div>
+      <div id="modalPayPatientGroup" class="form-group" style="display:none">
+        <label class="form-label">Patient <span class="req">*</span></label>
+        <select name="patient_id" id="modalPayPatient" class="form-control">
+          <option value="">Select referred patient…</option>
+          @foreach($source->patients as $pat)
+            <option value="{{ $pat->id }}">{{ $pat->full_name }}{{ $pat->jhc_id ? ' - '.$pat->jhc_id : '' }}</option>
+          @endforeach
+        </select>
+      </div>
       <div class="form-row cols-2">
         <div class="form-group">
-          <label class="form-label">Amount <span class="req">*</span></label>
+          <label class="form-label" id="modalPayAmtLabel">Amount <span class="req">*</span></label>
           <input type="number" name="paid_amount" id="modalPayAmt" class="form-control" step="0.01" min="0.01" required>
         </div>
         <div class="form-group">
@@ -195,6 +208,23 @@
 function setPayRecord(id, balance) {
     document.getElementById('modalPayId').value = id;
     document.getElementById('modalPayAmt').value = balance;
+    document.getElementById('modalPayAmtLabel').innerHTML = 'Amount <span class="req">*</span>';
+    document.getElementById('modalPayPatientGroup').style.display = 'none';
+    document.getElementById('modalPayPatient').required = false;
+    document.getElementById('modalPayNewNotice').style.display = 'none';
+    document.getElementById('payModal').classList.add('open');
+}
+
+// "Record Payment" clicked with no specific pending row selected — used to record
+// an incentive payment in retrospect when no ReferralPayment exists yet for this source
+// (e.g. the bill wasn't auto-linked, or the incentive is being settled outside the billing flow).
+function openNewPayRecord() {
+    document.getElementById('modalPayId').value = '';
+    document.getElementById('modalPayAmt').value = '';
+    document.getElementById('modalPayAmtLabel').innerHTML = 'Incentive Amount <span class="req">*</span>';
+    document.getElementById('modalPayPatientGroup').style.display = '';
+    document.getElementById('modalPayPatient').required = true;
+    document.getElementById('modalPayNewNotice').style.display = '';
     document.getElementById('payModal').classList.add('open');
 }
 </script>

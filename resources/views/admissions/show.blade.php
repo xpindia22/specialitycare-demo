@@ -92,6 +92,11 @@ $totalPkgPaid  = $admissionPackages->sum('paid_amount');
         <a href="{{ route('patients.show', $admission->patient) }}" class="btn btn-sm btn-outline" style="color:#fff;border-color:rgba(255,255,255,.3)">
             Patient Record
         </a>
+        @if($u->hasRole(['admin','doctor','nurse']))
+        <a href="{{ route('icu.chart', $admission) }}" class="btn btn-sm" style="background:#b91c1c;color:#fff;border-color:#b91c1c">
+            <i class="fa-solid fa-heart-pulse"></i> ICU Chart
+        </a>
+        @endif
     </div>
 </div>
 
@@ -108,7 +113,7 @@ $totalPkgPaid  = $admissionPackages->sum('paid_amount');
 
 {{-- Quick vitals strip (latest) --}}
 @if($latestVitals)
-<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;margin-bottom:20px">
+<div style="display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:10px;margin-bottom:20px">
     @foreach([
         ['label'=>'Temp','val'=> $latestVitals->temperature ? $latestVitals->temperature.'°F' : '—','icon'=>'fa-thermometer-half'],
         ['label'=>'Pulse','val'=> $latestVitals->pulse ? $latestVitals->pulse.' bpm' : '—','icon'=>'fa-heart-pulse'],
@@ -123,6 +128,11 @@ $totalPkgPaid  = $admissionPackages->sum('paid_amount');
         <div class="vb-label"><i class="fa-solid {{ $v['icon'] }}"></i> {{ $v['label'] }}</div>
     </div>
     @endforeach
+    @php $nl = $latestVitals->news2 !== null ? \App\Services\EarlyWarning::LEVELS[$latestVitals->news_level] : null; @endphp
+    <div class="vital-box" @if($nl) style="background:{{ $nl['bg'] }};color:{{ $nl['color'] }}" title="{{ $nl['label'] }} risk: {{ $nl['action'] }}" @endif>
+        <div class="vb-val" style="font-size:14px;{{ $nl ? 'color:'.$nl['color'] : '' }}">{{ $latestVitals->news2 ?? '—' }}{{ $latestVitals->news2_partial ? '*' : '' }}</div>
+        <div class="vb-label"><i class="fa-solid fa-triangle-exclamation"></i> NEWS2</div>
+    </div>
 </div>
 <div style="font-size:11px;color:var(--sc-muted);margin-top:-14px;margin-bottom:16px;text-align:right">
     Last vitals: {{ $latestVitals->recorded_at->format('d M Y, h:i A') }} by {{ $latestVitals->recordedBy->name }}
@@ -276,6 +286,9 @@ $totalPkgPaid  = $admissionPackages->sum('paid_amount');
                     @endif
                 </div>
             </div>
+            @if($admission->status === 'admitted')
+            @include('admissions._discharge-checklist')
+            @endif
             <div class="card">
                 <div class="card-header"><i class="fa-solid fa-circle-info"></i> Record</div>
                 <div class="card-body" style="font-size:12.5px;display:flex;flex-direction:column;gap:10px">
@@ -286,6 +299,40 @@ $totalPkgPaid  = $admissionPackages->sum('paid_amount');
         </div>
 
 </div>
+    {{-- Ward & bed history --}}
+    @php $rent = new \App\Services\RoomRent(); $stays = \App\Services\RoomRent::stays($admission); @endphp
+    <div class="card" style="margin-top:20px">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <span><i class="fa-solid fa-route"></i> Ward &amp; Bed History <span class="badge badge-navy" style="font-size:10px">{{ $admission->bedTransfers->count() }} transfer{{ $admission->bedTransfers->count() === 1 ? '' : 's' }}</span></span>
+            <span class="text-small text-muted">On a transfer day the higher room rent is charged</span>
+        </div>
+        <div class="table-wrap">
+            <table class="sc-table">
+                <thead><tr><th>Ward / Bed</th><th>From</th><th>To</th><th>Duration</th><th>Room rent / day</th><th>Moved in because</th><th>By</th></tr></thead>
+                <tbody>
+                @foreach($stays as $i => $st)
+                    @php
+                        $t = $i > 0 ? $admission->bedTransfers[$i - 1] : null;
+                        $end = $st['to'] ?? now();
+                        $mins = (int) $st['from']->diffInMinutes($end);
+                        $dur = $mins >= 1440 ? intdiv($mins, 1440) . 'd ' . intdiv($mins % 1440, 60) . 'h' : intdiv($mins, 60) . 'h ' . ($mins % 60) . 'm';
+                    @endphp
+                    <tr @if(!$st['to'] && $admission->status === 'admitted') style="background:var(--sc-teal-glow)" @endif>
+                        <td><span class="fw-700">{{ $st['ward']->name ?? '—' }}</span> · Bed {{ $st['bed']->bed_number ?? '—' }}
+                            @if($st['ward'])<span class="badge badge-gray" style="font-size:10px">{{ $st['ward']->type_label }}</span>@endif
+                            @if(!$st['to'] && $admission->status === 'admitted')<span class="badge badge-teal" style="font-size:10px">now</span>@endif</td>
+                        <td class="text-small" style="white-space:nowrap">{{ $st['from']->format('d M Y, h:i A') }}</td>
+                        <td class="text-small" style="white-space:nowrap">{{ $st['to'] ? $st['to']->format('d M Y, h:i A') : ($admission->status === 'admitted' ? '—' : '') }}</td>
+                        <td>{{ $dur }}</td>
+                        <td>{{ $rent->rate($st['ward']) > 0 ? '₹' . number_format($rent->rate($st['ward'])) : '—' }}</td>
+                        <td class="text-small">{{ $t ? ($t->reason ?: '—') : 'Admission' }}</td>
+                        <td class="text-small text-muted">{{ $t ? ($t->user->name ?? '—') : ($admission->createdBy->name ?? '') }}</td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>{{-- /tab-overview --}}
 
 
@@ -393,6 +440,7 @@ $totalPkgPaid  = $admissionPackages->sum('paid_amount');
                                 <th>SpO₂</th>
                                 <th>Glucose</th>
                                 <th>Weight</th>
+                                <th>NEWS2</th>
                                 <th>By</th>
                                 <th></th>
                             </tr>
@@ -408,6 +456,7 @@ $totalPkgPaid  = $admissionPackages->sum('paid_amount');
                                 <td>{{ $v->spo2 ? $v->spo2.'%' : '—' }}</td>
                                 <td>{{ $v->blood_glucose ? $v->blood_glucose.' mg/dL' : '—' }}</td>
                                 <td>{{ $v->weight ? $v->weight.' kg' : '—' }}</td>
+                                <td>@if($v->news2 !== null) @php $nl = \App\Services\EarlyWarning::LEVELS[$v->news_level]; @endphp<span class="badge" style="background:{{ $nl['bg'] }};color:{{ $nl['color'] }}" title="{{ $nl['label'] }} risk{{ $v->news2_partial ? ' (partial)' : '' }}">{{ $v->news2 }}{{ $v->news2_partial ? '*' : '' }}</span>@else — @endif</td>
                                 <td class="text-small text-muted">{{ $v->recordedBy->name }}</td>
                                 <td>
                                     @if($v->recorded_by === $u->id || $u->isAdmin())
@@ -429,13 +478,13 @@ $totalPkgPaid  = $admissionPackages->sum('paid_amount');
                             </tr>
                             @if($v->notes)
                             <tr>
-                                <td colspan="10" style="padding-top:0;padding-bottom:8px;font-size:12px;color:var(--sc-muted)">
+                                <td colspan="11" style="padding-top:0;padding-bottom:8px;font-size:12px;color:var(--sc-muted)">
                                     <i class="fa-solid fa-comment"></i> {{ $v->notes }}
                                 </td>
                             </tr>
                             @endif
                             @empty
-                            <tr><td colspan="10" class="text-center text-muted" style="padding:40px">No vitals recorded yet.</td></tr>
+                            <tr><td colspan="11" class="text-center text-muted" style="padding:40px">No vitals recorded yet.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -487,6 +536,20 @@ $totalPkgPaid  = $admissionPackages->sum('paid_amount');
                         <div class="form-group">
                             <label class="form-label">Weight (kg)</label>
                             <input type="number" name="weight" class="form-control" step="0.1" value="{{ old('weight') }}" placeholder="e.g. 70.0">
+                        </div>
+                    </div>
+                    <div class="form-row cols-2">
+                        <div class="form-group">
+                            <label class="form-label">Consciousness</label>
+                            <select name="avpu" class="form-control">
+                                @foreach(\App\Models\IpdVitals::AVPU as $k => $l)<option value="{{ $k }}" @selected(old('avpu', 'A') === $k)>{{ $k }} — {{ $l }}</option>@endforeach
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Oxygen</label>
+                            <select name="o2_device" class="form-control">
+                                @foreach(\App\Models\IpdVitals::O2_DEVICES as $k => $l)<option value="{{ $k }}" @selected(old('o2_device', $latestVitals->o2_device ?? 'air') === $k)>{{ $l }}</option>@endforeach
+                            </select>
                         </div>
                     </div>
                     <div class="form-group">
@@ -1942,6 +2005,10 @@ updateIoCats();
                         </select>
                     </div>
                     <div class="form-group">
+                        <label class="form-label">Payment Date <span class="req">*</span></label>
+                        <input type="date" name="payment_date" class="form-control" value="{{ today()->toDateString() }}" max="{{ today()->toDateString() }}" required>
+                    </div>
+                    <div class="form-group">
                         <label class="form-label">Transaction Ref</label>
                         <input type="text" name="transaction_ref" class="form-control" placeholder="Optional">
                     </div>
@@ -2172,6 +2239,10 @@ async function applyTemplate() {
                         <option value="{{ $v }}">{{ $l }}</option>
                         @endforeach
                     </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Payment Date <span class="req">*</span></label>
+                    <input type="date" name="payment_date" class="form-control" value="{{ today()->toDateString() }}" max="{{ today()->toDateString() }}" required>
                 </div>
                 <div class="form-row cols-2">
                     <div class="form-group">

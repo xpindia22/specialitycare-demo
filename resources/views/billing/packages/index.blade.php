@@ -4,9 +4,7 @@
 
 <div class="page-header">
     <div class="page-header-left"><h1>Billing Packages</h1></div>
-    <div class="page-header-right">
-        <a href="{{ route('packages.create') }}" class="btn btn-primary"><i class="fa-solid fa-plus me-1"></i> New Package</a>
-    </div>
+    @include('billing._toolbar', ['inline'=>true])
 </div>
 
 @if(session('success'))

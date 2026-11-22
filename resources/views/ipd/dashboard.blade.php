@@ -9,12 +9,7 @@
         <h1>IPD Dashboard</h1>
         <div class="breadcrumb">Inpatient Department — Live Overview</div>
     </div>
-    <a href="{{ route('ipd.census') }}" class="btn btn-outline">
-        <i class="fa-solid fa-clipboard-list"></i> Census / Rounds Sheet
-    </a>
-    <a href="{{ route('admissions.create') }}" class="btn btn-primary">
-        <i class="fa-solid fa-bed-pulse"></i> New Admission
-    </a>
+    @include('ipd._toolbar', ['inline'=>true])
 </div>
 
 {{-- KPI Row --}}

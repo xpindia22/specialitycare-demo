@@ -66,17 +66,15 @@ table.mini-tbl tr:last-child td { border-bottom:none; }
 @endpush
 
 @section('content')
+
 <div class="page-header no-print">
     <div class="page-header-left">
         <h1>IPD Daily Census</h1>
         <div class="breadcrumb">{{ now()->format('l, d F Y') }} &mdash; {{ $occupiedBeds }} patients</div>
     </div>
-    <button onclick="window.print()" class="btn btn-outline">
-        <i class="fa-solid fa-print"></i> Print
-    </button>
-    <a href="{{ route('ipd.dashboard') }}" class="btn btn-outline">
-        <i class="fa-solid fa-arrow-left"></i> IPD Dashboard
-    </a>
+    @include('ipd._toolbar', ['inline'=>true, 'extra' => [
+        ['url'=>'#', 'onclick'=>'window.print();return false;', 'icon'=>'fa-print', 'label'=>'Print', 'bg'=>'#0f766e'],
+    ]])
 </div>
 
 <div class="census-wrap">

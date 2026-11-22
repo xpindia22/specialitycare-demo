@@ -8,18 +8,41 @@ use App\Models\ActivityLog;
 
 class WardController extends Controller
 {
-    // Ward overview — all wards with bed summary
-    public function index()
+    // Ward overview — all wards with bed summary (live or as-of a date)
+    public function index(Request $request)
     {
         $wards = Ward::with('beds')->orderBy('name')->get();
-        $summary = [
-            'total'     => Bed::where('is_active', true)->count(),
-            'available' => Bed::where('is_active', true)->where('status', 'available')->count(),
-            'occupied'  => Bed::where('status', 'occupied')->count(),
-            'reserved'  => Bed::where('status', 'reserved')->count(),
-            'maintenance'=> Bed::where('status', 'maintenance')->count(),
-        ];
-        return view('wards.index', compact('wards', 'summary'));
+
+        // "As of" date — live (today) by default; a past date reconstructs
+        // occupancy from admissions (reserved/maintenance are live-only).
+        $asOfDate     = $request->get('date') ? \Carbon\Carbon::parse($request->get('date'))->startOfDay() : today();
+        if ($asOfDate->gt(today())) { $asOfDate = today(); }
+        $asOf         = $asOfDate->toDateString();
+        $isHistorical = $asOfDate->lt(today());
+
+        if ($isHistorical) {
+            $admissions = \App\Models\Admission::whereDate('admission_date', '<=', $asOf)
+                ->where(fn($q) => $q->whereNull('discharge_date')
+                                    ->orWhereDate('discharge_date', '>=', $asOf))
+                ->get()
+                ->keyBy('bed_id');
+
+            $total    = $wards->sum(fn($w) => $w->beds->where('is_active', true)->count());
+            $occupied = $wards->sum(fn($w) => $w->beds->where('is_active', true)->filter(fn($b) => $admissions->has($b->id))->count());
+            $summary  = ['total' => $total, 'available' => $total - $occupied, 'occupied' => $occupied, 'reserved' => 0, 'maintenance' => 0];
+        } else {
+            $admissions = collect();
+            $summary = [
+                'total'     => Bed::where('is_active', true)->count(),
+                'available' => Bed::where('is_active', true)->where('status', 'available')->count(),
+                'occupied'  => Bed::where('status', 'occupied')->count(),
+                'reserved'  => Bed::where('status', 'reserved')->count(),
+                'maintenance'=> Bed::where('status', 'maintenance')->count(),
+                'cleaning'   => Bed::where('status', 'cleaning')->count(),
+            ];
+        }
+
+        return view('wards.index', compact('wards', 'summary', 'admissions', 'asOf', 'asOfDate', 'isHistorical'));
     }
 
     // Ward detail — bed grid
@@ -35,29 +58,52 @@ class WardController extends Controller
         return view('wards.show', compact('ward', 'occupants'));
     }
 
-    // Live bed board — all wards + all beds with occupant info
-    public function bedBoard()
+    // Bed board — all wards + all beds with occupant info (live or as-of a date)
+    public function bedBoard(Request $request)
     {
         $wards = Ward::with(['beds' => fn($q) => $q->where('is_active', true)->orderBy('bed_number')])
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
 
-        // Load all current admissions keyed by bed_id
-        $admissions = \App\Models\Admission::with('patient','admittingDoctor')
-            ->where('status', 'admitted')
-            ->get()
-            ->keyBy('bed_id');
+        // "As of" date — live (today) by default. A past date shows historical
+        // occupancy reconstructed from admissions; reserved/maintenance are
+        // live-only states, so a non-occupied bed reads as Available back then.
+        $asOfDate     = $request->get('date') ? \Carbon\Carbon::parse($request->get('date'))->startOfDay() : today();
+        if ($asOfDate->gt(today())) { $asOfDate = today(); }
+        $asOf         = $asOfDate->toDateString();
+        $isHistorical = $asOfDate->lt(today());
 
-        $summary = [
-            'total'       => $wards->sum(fn($w) => $w->beds->count()),
-            'available'   => $wards->sum(fn($w) => $w->beds->where('status', 'available')->count()),
-            'occupied'    => $wards->sum(fn($w) => $w->beds->where('status', 'occupied')->count()),
-            'reserved'    => $wards->sum(fn($w) => $w->beds->where('status', 'reserved')->count()),
-            'maintenance' => $wards->sum(fn($w) => $w->beds->where('status', 'maintenance')->count()),
-        ];
+        if ($isHistorical) {
+            // Admissions occupying a bed on $asOf: admitted on/before it and not
+            // yet discharged by then (null discharge = still in at that point).
+            $admissions = \App\Models\Admission::with('patient', 'admittingDoctor')
+                ->whereDate('admission_date', '<=', $asOf)
+                ->where(fn($q) => $q->whereNull('discharge_date')
+                                    ->orWhereDate('discharge_date', '>=', $asOf))
+                ->get()
+                ->keyBy('bed_id');
 
-        return view('wards.bed-board', compact('wards', 'admissions', 'summary'));
+            $total    = $wards->sum(fn($w) => $w->beds->count());
+            $occupied = $wards->sum(fn($w) => $w->beds->filter(fn($b) => $admissions->has($b->id))->count());
+            $summary  = ['total' => $total, 'available' => $total - $occupied, 'occupied' => $occupied, 'reserved' => 0, 'maintenance' => 0];
+        } else {
+            $admissions = \App\Models\Admission::with('patient', 'admittingDoctor')
+                ->where('status', 'admitted')
+                ->get()
+                ->keyBy('bed_id');
+
+            $summary = [
+                'total'       => $wards->sum(fn($w) => $w->beds->count()),
+                'available'   => $wards->sum(fn($w) => $w->beds->where('status', 'available')->count()),
+                'occupied'    => $wards->sum(fn($w) => $w->beds->where('status', 'occupied')->count()),
+                'reserved'    => $wards->sum(fn($w) => $w->beds->where('status', 'reserved')->count()),
+                'maintenance' => $wards->sum(fn($w) => $w->beds->where('status', 'maintenance')->count()),
+                'cleaning'    => $wards->sum(fn($w) => $w->beds->where('status', 'cleaning')->count()),
+            ];
+        }
+
+        return view('wards.bed-board', compact('wards', 'admissions', 'summary', 'asOf', 'asOfDate', 'isHistorical'));
     }
 
     // Create ward form
@@ -131,7 +177,7 @@ class WardController extends Controller
     public function updateBed(Request $request, Bed $bed)
     {
         $request->validate([
-            'status' => 'required|in:available,occupied,reserved,maintenance',
+            'status' => 'required|in:available,occupied,reserved,maintenance,cleaning',
             'notes'  => 'nullable|string|max:255',
         ]);
         $old = $bed->status;

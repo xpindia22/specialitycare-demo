@@ -3,6 +3,8 @@
 @section('page-title','Pharmacy Purchases')
 @section('content')
 
+@include('pharmacy._toolbar')
+
 <div class="page-header">
     <div class="page-header-left">
         <a href="{{ route('pharmacy.dashboard') }}" class="text-small"><i class="fa-solid fa-arrow-left"></i> Pharmacy</a>

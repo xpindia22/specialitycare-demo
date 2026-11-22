@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', ('James Health Care')) — {{ config('app.name') }}</title>
+    <title>@yield('title', ('James Heart Care')) — {{ config('app.name') }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
@@ -215,9 +215,30 @@
 
         .page-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
         .page-header-left { flex: 1; }
+
+        /* TABLE WRAP — always scrollable, works on every screen size */
+        .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .page-header h1 { font-size: 22px; font-weight: 700; color: var(--sc-navy); }
         .page-header .breadcrumb { font-size: 12px; color: var(--sc-muted); margin-top: 3px; }
         .page-header .breadcrumb a { color: var(--sc-teal); text-decoration: none; }
+
+        /* Embedded YouTube player (forum posts + DMs) */
+        .yt-embed { display:block; position:relative; width:100%; max-width:480px; aspect-ratio:16/9; margin:6px 0; border-radius:10px; overflow:hidden; background:#000; }
+        .yt-embed iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+
+        /* ── PATIENT CONTEXT BAR ── */
+        .sc-patient-bar { background:var(--sc-surface); border-bottom:1px solid var(--sc-border); padding:0 24px; display:flex; align-items:center; min-height:38px; position:sticky; top:64px; z-index:49; overflow-x:auto; }
+        .sc-patient-bar::-webkit-scrollbar { display:none; }
+        .spb-name { display:flex; align-items:center; gap:6px; font-weight:700; font-size:13px; color:var(--sc-navy); white-space:nowrap; padding-right:14px; border-right:1px solid var(--sc-border); margin-right:8px; flex-shrink:0; }
+        .spb-name a { color:inherit; text-decoration:none; }
+        .spb-jhc { font-size:11px; color:var(--sc-muted); font-weight:600; font-family:monospace; }
+        .spb-links { display:flex; gap:2px; }
+        .spb-links a { display:inline-flex; align-items:center; gap:5px; padding:5px 11px; font-size:12px; color:var(--sc-muted); text-decoration:none; border-radius:6px; white-space:nowrap; font-weight:500; transition:background .12s,color .12s; }
+        .spb-links a:hover { background:rgba(0,0,0,.04); color:var(--sc-navy); }
+        .spb-links a.spb-active { color:var(--sc-teal); font-weight:700; background:rgba(10,180,180,.07); }
+        [data-theme="dark"] .sc-patient-bar { background:var(--sc-surface); }
+        [data-theme="dark"] .spb-name { color:var(--sc-text); }
+        [data-theme="dark"] .spb-links a:hover { background:rgba(255,255,255,.06); color:var(--sc-text); }
 
         /* ── CARDS ── */
         .card {
@@ -363,6 +384,9 @@
         .alert-danger  { background: rgba(232,76,76,.1);  color: #922020; border: 1px solid rgba(232,76,76,.25); }
         .alert-warning { background: rgba(245,166,35,.12); color: #7a4f00; border: 1px solid rgba(245,166,35,.3); }
         .alert-info    { background: rgba(10,180,180,.1); color: #065e5e; border: 1px solid rgba(10,180,180,.25); }
+        /* .alert-flash: blinks and stays 10 s (e.g. discharge blocked by the checklist) */
+        .alert-flash { animation: alertFlash 1s ease-in-out 10; font-weight: 600; }
+        @keyframes alertFlash { 0%,100% { background: rgba(232,76,76,.1); } 50% { background: #e84c4c; color: #fff; } }
 
         /* ── PATIENT HEADER STRIP ── */
         .patient-strip {
@@ -500,14 +524,29 @@
             /* Flash messages */
             #main-wrap > div[style*="padding: 0 24px"] { padding: 0 12px !important; }
 
-            /* Page header — stack actions below title */
-            .page-header { flex-wrap: wrap; gap: 10px; }
+            /* Page header — title takes full row, actions wrap below compactly */
+            .page-header { flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+            .page-header-left { flex: 0 0 100%; }
+            .page-header .btn { font-size: 11.5px !important; padding: 5px 9px !important; white-space: nowrap; }
             .page-header > div[style*="display:flex"], .page-header > div[style*="display: flex"] { flex-wrap: wrap; }
 
             /* Grids → single column */
             .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
             /* Stat cards: 2-up on tablet/mobile */
             .grid.grid-4 { grid-template-columns: repeat(2, 1fr); }
+
+            /* Collapse any .grid with inline column definitions (billing sidebar, etc.) */
+            .grid[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+
+            /* 4-column inline stat rows → 2 per row */
+            [style*="grid-template-columns:repeat(4"] { grid-template-columns: repeat(2,1fr) !important; }
+            [style*="grid-template-columns: repeat(4"] { grid-template-columns: repeat(2,1fr) !important; }
+
+            /* Patient context bar: don't sticky on mobile (blocks content), allow horizontal scroll */
+            .sc-patient-bar { position: relative !important; top: auto !important; flex-wrap: nowrap; }
+            .spb-links { flex-wrap: nowrap; overflow-x: auto; }
+            .spb-links::-webkit-scrollbar { display: none; }
+            .spb-name { flex-shrink: 0; }
 
             /* Forms → single column */
             .form-row.cols-2,
@@ -544,13 +583,25 @@
             /* Buttons */
             .btn-lg { padding: 10px 20px; font-size: 14px; }
 
-            /* Two-column layouts like show pages */
+            /* Two-column layouts & fixed-sidebar layouts */
             div[style*="grid-template-columns:2fr 1fr"],
-            div[style*="grid-template-columns: 2fr 1fr"] {
-                grid-template-columns: 1fr !important;
-            }
+            div[style*="grid-template-columns: 2fr 1fr"],
             div[style*="grid-template-columns:1fr 2fr"],
-            div[style*="grid-template-columns: 1fr 2fr"] {
+            div[style*="grid-template-columns: 1fr 2fr"],
+            div[style*="grid-template-columns:1fr 3"],
+            div[style*="grid-template-columns: 1fr 3"],
+            div[style*="grid-template-columns:3fr"],
+            div[style*="grid-template-columns: 3fr"],
+            div[style*="grid-template-columns:1fr 340px"],
+            div[style*="grid-template-columns: 1fr 340px"],
+            div[style*="grid-template-columns:1fr 320px"],
+            div[style*="grid-template-columns: 1fr 320px"],
+            div[style*="grid-template-columns:1fr 300px"],
+            div[style*="grid-template-columns: 1fr 300px"],
+            div[style*="grid-template-columns:1fr 360px"],
+            div[style*="grid-template-columns: 1fr 360px"],
+            div[style*="grid-template-columns:1fr 380px"],
+            div[style*="grid-template-columns: 1fr 380px"] {
                 grid-template-columns: 1fr !important;
             }
         }
@@ -558,8 +609,27 @@
         @media (max-width: 480px) {
             html { font-size: 13px; }
             .grid.grid-4 { grid-template-columns: 1fr; }
-            #topbar { gap: 6px; }
+            #topbar { gap: 4px; }
             .hide-mobile { display: none; }
+            #page-content { padding: 10px; }
+
+            /* Topbar: smaller icon buttons */
+            .topbar-btn { width: 32px; height: 32px; font-size: 13px; }
+            .topbar-btn .badge-dot { top: -2px; right: -2px; }
+
+            /* Page header buttons: icon + short label only — hide long text via ellipsis */
+            .page-header .btn { max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
+
+            /* Stat cards single column */
+            [style*="grid-template-columns:repeat(4"] { grid-template-columns: 1fr !important; }
+            [style*="grid-template-columns: repeat(4"] { grid-template-columns: 1fr !important; }
+
+            /* Tab nav: even more compact */
+            .tab-btn { padding: 6px 8px; font-size: 11px; }
+
+            /* Modals: full screen on tiny phones */
+            .modal-box { width: 100% !important; border-radius: 10px 10px 0 0; margin-top: auto; }
+            .modal-overlay { align-items: flex-end !important; }
         }
 
         /* ── DARK MODE ── */
@@ -654,7 +724,7 @@
     <div class="sidebar-brand">
         <div class="brand-icon"><i class="fa-solid fa-heart-pulse"></i></div>
         <div class="brand-text">
-            <strong>{{ setting('clinic_name', 'James Health Care Pvt. Ltd.') }}</strong>
+            <strong>{{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}</strong>
             <span>Hospital Management</span>
         </div>
     </div>
@@ -665,6 +735,17 @@
         <a href="{{ route('dashboard') }}" class="nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}" id="nav-dashboard">
             <div class="nav-item-inner"><i class="fa-solid fa-gauge-high"></i> Dashboard</div>
         </a>
+
+        {{-- Recent Patients — JS-populated from localStorage --}}
+        <div id="nsw-recent-pts" style="display:none">
+            <div class="nav-section" style="cursor:default;pointer-events:none;user-select:none">Recent Patients</div>
+            <div id="ng-recent-pts"></div>
+        </div>
+        <style>
+            #ng-recent-pts .rec-x{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:2px;border-radius:3px;color:rgba(255,255,255,.35);font-size:11px;opacity:0;transition:opacity .12s,background .12s,color .12s}
+            #ng-recent-pts .nav-item:hover .rec-x{opacity:1}
+            #ng-recent-pts .rec-x:hover{background:rgba(255,255,255,.15);color:#fff}
+        </style>
 
         {{-- Reception --}}
         @if($u->hasRole(['admin','doctor','nurse','receptionist']))
@@ -693,6 +774,9 @@
                         @php try { $opdWaiting = \DB::table('opd_tokens')->whereDate('token_date', today())->where('status','waiting')->count(); } catch(\Exception $e) { $opdWaiting = 0; } @endphp
                         @if($opdWaiting > 0) <span class="nav-badge amber">{{ $opdWaiting }}</span> @endif
                     </div>
+                </a>
+                <a href="{{ route('opd.directory') }}" class="nav-item {{ request()->routeIs('opd.directory') ? 'active' : '' }}">
+                    <div class="nav-item-inner"><i class="fa-solid fa-hospital-user"></i> Find a Doctor</div>
                 </a>
             </div>
         </div>
@@ -725,6 +809,13 @@
                 <a href="{{ route('encounters.index') }}" class="nav-item {{ request()->routeIs('encounters.*') ? 'active' : '' }}">
                     <div class="nav-item-inner"><i class="fa-solid fa-notes-medical"></i> Encounters</div>
                 </a>
+                <a href="{{ route('opd.referrals.index') }}" class="nav-item {{ request()->routeIs('opd.referrals.*') ? 'active' : '' }}">
+                    <div class="nav-item-inner">
+                        <i class="fa-solid fa-share-from-square"></i> Dept Referrals
+                        @php try { $openReferrals = \DB::table('opd_referrals')->where('status', 'pending')->count(); } catch(\Exception $e) { $openReferrals = 0; } @endphp
+                        @if($openReferrals > 0) <span class="nav-badge amber">{{ $openReferrals }}</span> @endif
+                    </div>
+                </a>
                 @if($u->hasRole(['admin','nurse','receptionist']))
                 <a href="{{ route('opd.register') }}" class="nav-item {{ request()->routeIs('opd.register') ? 'active' : '' }}">
                     <div class="nav-item-inner"><i class="fa-solid fa-clipboard-list"></i> OPD Register</div>
@@ -752,6 +843,18 @@
                         @if($currentAdmissions > 0)<span class="nav-badge" style="background:#dcfce7;color:#14532d">{{ $currentAdmissions }}</span>@endif
                     </div>
                 </a>
+                @if($u->hasRole(['admin','doctor','nurse']))
+                <a href="{{ route('icu.board') }}" class="nav-item {{ request()->routeIs('icu.board','icu.chart') ? 'active' : '' }}">
+                    <div class="nav-item-inner">
+                        <i class="fa-solid fa-display"></i> ICU Board
+                        @php try { $icuAlerts = \DB::table('ipd_vitals as v')->join('admissions as a', 'a.id', '=', 'v.admission_id')->where('a.status', 'admitted')->where('v.news2', '>=', 7)->whereRaw('v.recorded_at = (select max(x.recorded_at) from ipd_vitals x where x.admission_id = v.admission_id)')->distinct()->count('v.admission_id'); } catch(\Exception $e) { $icuAlerts = 0; } @endphp
+                        @if($icuAlerts > 0)<span class="nav-badge" title="Patients with NEWS2 ≥ 7">{{ $icuAlerts }}</span>@endif
+                    </div>
+                </a>
+                <a href="{{ route('icu.calculator') }}" class="nav-item {{ request()->routeIs('icu.calculator') ? 'active' : '' }}">
+                    <div class="nav-item-inner"><i class="fa-solid fa-calculator"></i> Drug Calculator</div>
+                </a>
+                @endif
                 <a href="{{ route('wards.bed-board') }}" class="nav-item {{ request()->routeIs('wards.bed-board') ? 'active' : '' }}">
                     <div class="nav-item-inner">
                         <i class="fa-solid fa-map"></i> Bed Board
@@ -1027,6 +1130,12 @@
                 <a href="{{ route('doctors.index') }}" class="nav-item {{ request()->routeIs('doctors.*') ? 'active' : '' }}">
                     <div class="nav-item-inner"><i class="fa-solid fa-user-doctor"></i> Doctors</div>
                 </a>
+                <a href="{{ route('departments.index') }}" class="nav-item {{ request()->routeIs('departments.*') ? 'active' : '' }}">
+                    <div class="nav-item-inner"><i class="fa-solid fa-hospital"></i> Departments</div>
+                </a>
+                <a href="{{ route('opd.fees.index') }}" class="nav-item {{ request()->routeIs('opd.fees.*') ? 'active' : '' }}">
+                    <div class="nav-item-inner"><i class="fa-solid fa-indian-rupee-sign"></i> OPD Fee Rules</div>
+                </a>
                 @endif
                 @if($u->can('admin.staff'))
                 <a href="{{ route('staff.index') }}" class="nav-item {{ request()->routeIs('staff.*') ? 'active' : '' }}">
@@ -1061,6 +1170,9 @@
                 @if($u->can('admin.import'))
                 <a href="{{ route('import.index') }}" class="nav-item {{ request()->routeIs('import.*') ? 'active' : '' }}">
                     <div class="nav-item-inner"><i class="fa-solid fa-file-import"></i> Import OpenEMR</div>
+                </a>
+                <a href="{{ route('export.index') }}" class="nav-item {{ request()->routeIs('export.*') ? 'active' : '' }}">
+                    <div class="nav-item-inner"><i class="fa-solid fa-file-export"></i> Export to OpenEMR</div>
                 </a>
                 @endif
                 @if($u->can('admin.referrals'))
@@ -1171,7 +1283,7 @@
     </div>
     <div class="sidebar-footer">
         <div style="font-size:11px; margin-bottom:4px;">{{ now()->format('D, d M Y') }}</div>
-        <div>v1.0.0 &nbsp;·&nbsp; {{ setting('clinic_name', 'James Health Care Pvt. Ltd.') }}</div>
+        <div>v1.0.0 &nbsp;·&nbsp; {{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}</div>
     </div>
 </aside>
 
@@ -1211,7 +1323,10 @@
                 <div id="notif-panel" style="display:none;position:absolute;top:42px;right:0;width:360px;max-height:480px;background:var(--sc-surface);border:1px solid var(--sc-border);border-radius:10px;box-shadow:0 8px 24px rgba(15,31,61,.15);z-index:200;overflow:hidden;text-align:left">
                     <div style="padding:10px 14px;border-bottom:1px solid var(--sc-border);display:flex;align-items:center;justify-content:space-between">
                         <strong style="font-size:13px">Notifications</strong>
-                        <button type="button" class="btn btn-icon btn-sm btn-outline" style="font-size:10px" onclick="loadNotifications(event)" title="Refresh"><i class="fa-solid fa-rotate"></i></button>
+                        <span style="display:flex;gap:6px;align-items:center">
+                            <button type="button" id="dm-popup-toggle" class="btn btn-icon btn-sm btn-outline" style="font-size:10px" onclick="toggleDmPopups(event)" title="Message pop-ups"><i class="fa-solid fa-comment-dots"></i></button>
+                            <button type="button" class="btn btn-icon btn-sm btn-outline" style="font-size:10px" onclick="loadNotifications(event)" title="Refresh"><i class="fa-solid fa-rotate"></i></button>
+                        </span>
                     </div>
                     <div id="notif-body" style="max-height:420px;overflow-y:auto">
                         <div style="padding:24px;text-align:center;color:var(--sc-muted);font-size:12px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
@@ -1240,7 +1355,7 @@
             <div class="alert alert-danger"><i class="fa-solid fa-circle-xmark"></i> <div>{{ session('error') }}</div></div>
         @endif
         @if($errors->any())
-            <div class="alert alert-danger">
+            <div class="alert alert-danger{{ $errors->has('checklist') ? ' alert-flash' : '' }}">
                 <i class="fa-solid fa-triangle-exclamation"></i>
                 <div>
                     @foreach($errors->all() as $error)
@@ -1250,6 +1365,8 @@
             </div>
         @endif
     </div>
+
+    @yield('patient-context')
 
     <!-- PAGE CONTENT -->
     <main id="page-content">
@@ -1306,7 +1423,8 @@
                 @foreach([
                     ['⌘ K / Ctrl K','Command Palette'],
                     ['/','Command Palette'],
-                    ['n','New Patient'],['b','New Bill'],['a','New Appointment'],
+                    ['n','Add entry (diary) / New Patient'],['b','New Bill'],['a','New Appointment'],
+                    ['e','New Visit for this patient (on patient pages)'],
                     ['d','Dashboard'],['p','Patients List'],['?','Show Shortcuts'],['Esc','Close Modal'],
                 ] as [$key,$desc])
                 <tr style="border-bottom:1px solid var(--sc-border)">
@@ -1370,6 +1488,7 @@ function saveNavItems() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    renderSidebarRecentPts();
     const scroll = document.getElementById('sidebar-scroll');
 
     // ── Restore section order ──
@@ -1390,7 +1509,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!grp) return;
             hrefs.forEach(function(href) {
                 if (!href) return;
-                const el = grp.querySelector('[href="' + href + '"]');
+                const el = document.querySelector('.nav-group > .nav-item[href="' + href + '"]');
                 if (el) grp.appendChild(el);
             });
         });
@@ -1624,15 +1743,17 @@ $(document).on('click', function(e) {
     if (!$(e.target).closest('.topbar-search').length) $('#global-search-results').hide();
 });
 
-// Tab system
+// Tab system — panes are siblings of .tab-container, so search parentElement for them
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const target = btn.dataset.tab;
+        if (!target) return; // <a> nav links — let them navigate normally
         const container = btn.closest('.tab-container') || document;
+        const paneRoot = container.parentElement || document;
         container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        container.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        paneRoot.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
         btn.classList.add('active');
-        const pane = container.querySelector('#tab-' + target) || document.getElementById('tab-' + target);
+        const pane = paneRoot.querySelector('#tab-' + target) || document.getElementById('tab-' + target);
         if (pane) pane.classList.add('active');
     });
 });
@@ -1640,8 +1761,11 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // Auto-dismiss alerts — but keep ones marked .alert-keep (e.g. one-time
 // PINs the user must read/copy).
 setTimeout(() => {
-    document.querySelectorAll('.alert:not(.alert-keep)').forEach(a => { a.style.opacity='0'; a.style.transition='opacity .5s'; setTimeout(()=>a.remove(), 500); });
+    document.querySelectorAll('.alert:not(.alert-keep):not(.alert-flash)').forEach(a => { a.style.opacity='0'; a.style.transition='opacity .5s'; setTimeout(()=>a.remove(), 500); });
 }, 4000);
+setTimeout(() => {
+    document.querySelectorAll('.alert-flash:not(.alert-keep)').forEach(a => { a.style.opacity='0'; a.style.transition='opacity .5s'; setTimeout(()=>a.remove(), 500); });
+}, 10000);
 
 // Select2 init
 $(document).ready(() => { $('.select2').select2({ theme: 'classic' }); });
@@ -1714,6 +1838,46 @@ $(document).ready(() => { $('.select2').select2({ theme: 'classic' }); });
         }
     });
 })();
+
+// ── RECENT PATIENTS (localStorage, cross-session) ──
+// Max items is admin-configurable (Settings → Recent Patients in Sidebar).
+var SC_RECENT_MAX = Math.max(1, Math.min(20, {{ (int) setting('recent_patients_count', 5) ?: 5 }}));
+function escRec(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function scTrackPatient(id, name, jhcId, url) {
+    try {
+        let list = JSON.parse(localStorage.getItem('scRecentPatients') || '[]');
+        list = list.filter(x => x.id !== id);
+        list.unshift({ id, name, jhcId, url });
+        if (list.length > SC_RECENT_MAX) list.length = SC_RECENT_MAX;
+        localStorage.setItem('scRecentPatients', JSON.stringify(list));
+        renderSidebarRecentPts();
+    } catch(e) {}
+}
+function renderSidebarRecentPts() {
+    try {
+        let list = JSON.parse(localStorage.getItem('scRecentPatients') || '[]');
+        if (list.length > SC_RECENT_MAX) list = list.slice(0, SC_RECENT_MAX);
+        const wrap = document.getElementById('nsw-recent-pts');
+        const grp  = document.getElementById('ng-recent-pts');
+        if (!wrap || !grp) return;
+        if (!list.length) { wrap.style.display = 'none'; return; }
+        wrap.style.display = '';
+        grp.innerHTML = list.map(p => `<a href="${escRec(p.url)}" class="nav-item"><div class="nav-item-inner"><i class="fa-solid fa-user" style="color:rgba(255,255,255,.45)"></i><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escRec(p.name)}</span><span class="nav-badge" style="font-family:monospace;font-size:9px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.5);font-weight:400">${escRec(p.jhcId)}</span><span class="rec-x" role="button" title="Remove from recent" onclick="return scRemoveRecentPt(event, ${p.id})"><i class="fa-solid fa-xmark"></i></span></div></a>`).join('');
+    } catch(e) {}
+}
+function scRemoveRecentPt(ev, id) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    try {
+        let list = JSON.parse(localStorage.getItem('scRecentPatients') || '[]');
+        list = list.filter(x => x.id !== id);
+        localStorage.setItem('scRecentPatients', JSON.stringify(list));
+        renderSidebarRecentPts();
+    } catch(e) {}
+    return false;
+}
 </script>
 @stack('scripts')
 <script>
@@ -1760,6 +1924,7 @@ document.addEventListener('keydown', function(e) {
         'a': '/appointments/create',
         'd': '/',
         'p': '/patients',
+        'e': '/appointments/create',
     };
 
     if (e.key === '?') {
@@ -1774,7 +1939,13 @@ document.addEventListener('keydown', function(e) {
     }
     if (shortcuts[e.key] && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
-        window.location.href = shortcuts[e.key];
+        if (e.key === 'n' && typeof window.scNewEntryOverride === 'function') {
+            window.scNewEntryOverride();
+        } else if (e.key === 'e' && typeof window.scPatientVisitUrl === 'string') {
+            window.location.href = window.scPatientVisitUrl;
+        } else {
+            window.location.href = shortcuts[e.key];
+        }
     }
 });
 
@@ -1824,6 +1995,7 @@ function loadNotifications(e) {
 function escapeNotif(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+
 // Click outside the panel closes it
 document.addEventListener('click', function(e) {
     const btn = document.getElementById('notif-btn');
@@ -1845,23 +2017,87 @@ $(document).ready(function() {
         }).catch(() => {});
 
 @if($licSvc->isEnabled('forum') && $u->can('messages.send'))
-    // Messages unread count — sidebar badge next to "Messages".
-    // Tiny poll every 60s; cheap query (one indexed COUNT).
+    // Messages unread count — sidebar badge + bell + light-green pop-up toast.
+    // Polls every 20s (cheap COUNT + one latest row). The toast fires only when
+    // the unread count RISES while you're on the page (new DM arrived), never on
+    // the first load, and can be switched off via the bell's pop-up toggle.
+    let lastDmCount = null;
     function refreshMsgUnread() {
         fetch('{{ route("messages.unread-count") }}', { headers: { 'Accept': 'application/json' }})
             .then(r => r.ok ? r.json() : { count: 0 })
             .then(d => {
-                const b = document.getElementById('msg-unread-badge');
-                if (!b) return;
                 const n = parseInt(d.count || 0, 10);
-                if (n > 0) { b.style.display = ''; b.textContent = n; }
-                else      { b.style.display = 'none'; }
+                const b = document.getElementById('msg-unread-badge');
+                if (b) { if (n > 0) { b.style.display = ''; b.textContent = n; } else { b.style.display = 'none'; } }
+                // New message arrived since last poll → light-green bubble.
+                if (lastDmCount !== null && n > lastDmCount && dmPopupsOn() && d.latest) {
+                    showDmToast(d.latest);
+                    loadNotifBadge();   // keep the bell count fresh too
+                }
+                lastDmCount = n;
             }).catch(() => {});
     }
     refreshMsgUnread();
-    setInterval(refreshMsgUnread, 60000);
+    setInterval(refreshMsgUnread, 20000);
 @endif
 });
+
+// ── DM POP-UP TOAST (light-green bubble) ──
+function dmPopupsOn() { return localStorage.getItem('dmPopups') !== 'off'; }
+function syncDmToggle() {
+    const btn = document.getElementById('dm-popup-toggle');
+    if (!btn) return;
+    const on = dmPopupsOn();
+    btn.style.opacity = on ? '1' : '.45';
+    btn.title = on ? 'Message pop-ups: ON (click to mute)' : 'Message pop-ups: OFF (click to enable)';
+}
+function toggleDmPopups(e) {
+    if (e) e.stopPropagation();
+    localStorage.setItem('dmPopups', dmPopupsOn() ? 'off' : 'on');
+    syncDmToggle();
+}
+function showDmToast(latest) {
+    let wrap = document.getElementById('dm-toast-wrap');
+    if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id = 'dm-toast-wrap';
+        wrap.style.cssText = 'position:fixed;top:64px;right:18px;z-index:1200;display:flex;flex-direction:column;gap:8px;max-width:320px';
+        document.body.appendChild(wrap);
+    }
+    if (!document.getElementById('dm-toast-style')) {
+        const s = document.createElement('style'); s.id = 'dm-toast-style';
+        s.textContent = '@keyframes dmToastIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}';
+        document.head.appendChild(s);
+    }
+    const t = document.createElement('div');
+    t.style.cssText = 'background:#dcfce7;border:1px solid #86efac;color:#15803d;border-radius:10px;padding:10px 12px;box-shadow:0 6px 18px rgba(21,128,61,.18);font-size:12.5px;display:flex;gap:9px;align-items:flex-start;cursor:pointer;animation:dmToastIn .2s ease-out';
+    t.onclick = () => { window.location = latest.url; };
+    const from = escapeNotif(latest.from || 'Someone');
+    const snip = escapeNotif(latest.snippet || '');
+    t.innerHTML = `
+        <i class="fa-solid fa-comment-dots" style="margin-top:1px"></i>
+        <div style="flex:1;min-width:0">
+            <div style="font-weight:700">New message from ${from}</div>
+            ${snip ? `<div style="color:#166534;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${snip}</div>` : ''}
+            <div style="margin-top:3px"><a href="javascript:void(0)" onclick="event.stopPropagation();localStorage.setItem('dmPopups','off');syncDmToggle();this.closest('#dm-toast-wrap').remove();" style="font-size:10.5px;color:#15803d;text-decoration:underline">Turn off pop-ups</a></div>
+        </div>
+        <button type="button" onclick="event.stopPropagation();this.parentElement.remove()" style="background:none;border:none;color:#15803d;cursor:pointer;font-size:13px;line-height:1">&times;</button>`;
+    wrap.appendChild(t);
+    setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 320); }, 8000);
+}
+// Re-fetch the bell badge (count of attention items, incl. unread DMs)
+function loadNotifBadge() {
+    fetch('{{ route("notifications.feed") }}', { headers: { 'Accept': 'application/json' }})
+        .then(r => r.ok ? r.json() : { items: [] })
+        .then(data => {
+            const n = (data.items || []).length;
+            const dot = document.getElementById('notif-dot');
+            const cnt = document.getElementById('notif-count');
+            if (n > 0) { if (dot) dot.style.display = ''; if (cnt) { cnt.style.display = ''; cnt.textContent = n; } }
+            else       { if (dot) dot.style.display = 'none'; if (cnt) cnt.style.display = 'none'; }
+        }).catch(() => {});
+}
+document.addEventListener('DOMContentLoaded', syncDmToggle);
 
 // ── COMMAND PALETTE ──
 const CP = {
@@ -1914,8 +2150,12 @@ function cpRender(serverResults) {
     const sections = [];
 
     if (!q) {
+        try {
+            const rp = JSON.parse(localStorage.getItem('scRecentPatients') || '[]');
+            if (rp.length) sections.push({ label: 'Recent Patients', items: rp.map(p => ({ label: p.name, sub: p.jhcId, icon: 'fa-user', url: p.url })) });
+        } catch(e) {}
         const recent = cpRecent();
-        if (recent.length) sections.push({ label: 'Recently viewed', items: recent });
+        if (recent.length) sections.push({ label: 'Recently visited', items: recent });
         sections.push({ label: 'Quick actions', items: CP.quickActions });
         sections.push({ label: 'Go to',         items: CP.nav });
     } else {

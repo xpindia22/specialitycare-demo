@@ -14,8 +14,10 @@
     <a href="{{ route('ot.print') }}?from={{ request('date', today()->toDateString()) }}&to={{ request('date', today()->toDateString()) }}" class="btn btn-outline" target="_blank">
       <i class="fa-solid fa-print"></i> Print Register
     </a>
-    <a href="{{ route('ot.create') }}" class="btn btn-primary"><i class="fa-solid fa-plus"></i> New Operation</a>
   </div>
+  @include('diagnostics._toolbar', ['inline'=>true, 'extra' => [
+      ['url'=>route('ot.create'), 'icon'=>'fa-plus', 'label'=>'New Operation', 'bg'=>'#047857'],
+  ]])
 </div>
 
 <div class="card mb-4">

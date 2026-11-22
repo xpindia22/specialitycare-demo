@@ -2,8 +2,8 @@
 namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 class LabOrderItem extends Model {
-    protected $fillable = ['lab_order_id','lab_test_id','lab_panel_id','price','status','result_value','result_status','abnormal_flag','remarks','result_entered_at','result_entered_by'];
-    protected $casts = ['price'=>'decimal:2','result_entered_at'=>'datetime'];
+    protected $fillable = ['lab_order_id','lab_test_id','lab_panel_id','price','profit','status','result_value','result_status','abnormal_flag','remarks','result_entered_at','result_entered_by'];
+    protected $casts = ['price'=>'decimal:2','profit'=>'decimal:2','result_entered_at'=>'datetime'];
     public function order() { return $this->belongsTo(LabOrder::class,'lab_order_id'); }
     public function test() { return $this->belongsTo(LabTest::class,'lab_test_id'); }
     public function panel() { return $this->belongsTo(LabPanel::class,'lab_panel_id'); }

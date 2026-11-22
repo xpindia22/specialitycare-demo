@@ -39,6 +39,16 @@ class UserController extends Controller
         return back()->with('success', "{$user->name}'s password has been reset.");
     }
 
+    /** Allow / stop this user deleting (hiding) visits. Only the owner may change it. */
+    public function updateDeleteVisits(Request $request, User $user)
+    {
+        abort_unless(auth()->user()?->isOwner(), 403, 'Only the clinic owner can change this.');
+        $allow = $request->boolean('can_delete_visits');
+        $user->forceFill(['can_delete_visits' => $allow])->save();
+        ActivityLog::log('updated', ($allow ? 'Allowed' : 'Stopped') . " {$user->name} ({$user->email}) " . ($allow ? 'to delete' : 'deleting') . ' visits');
+        return back()->with('success', "{$user->name} " . ($allow ? 'can now delete visits.' : 'can no longer delete visits.'));
+    }
+
     /** Update a user's assigned roles (multi-role pivot). */
     public function updateRoles(Request $request, User $user)
     {

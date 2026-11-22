@@ -53183,3 +53183,108 @@ SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
 /*M!100616 SET NOTE_VERBOSITY=@OLD_NOTE_VERBOSITY */;
 
 -- Dump completed on 2026-05-31 12:42:39
+
+-- CDS clinical_rules (added 2026-11-22 from prod schema; no PII)
+/*M!999999\- enable the sandbox mode */ 
+-- MariaDB dump 10.19  Distrib 10.11.14-MariaDB, for debian-linux-gnu (x86_64)
+--
+-- Host: localhost    Database: specialitycare
+-- ------------------------------------------------------
+-- Server version	10.11.14-MariaDB-0ubuntu0.24.04.1
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `clinical_rules`
+--
+
+DROP TABLE IF EXISTS `clinical_rules`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `clinical_rules` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(140) NOT NULL,
+  `category` varchar(20) NOT NULL DEFAULT 'symptom',
+  `severity` varchar(10) NOT NULL DEFAULT 'info',
+  `match_type` varchar(20) NOT NULL,
+  `metric` varchar(30) DEFAULT NULL,
+  `comparator` varchar(4) DEFAULT NULL,
+  `value_num` decimal(8,2) DEFAULT NULL,
+  `keywords` varchar(500) DEFAULT NULL,
+  `keyword_fields` varchar(255) DEFAULT NULL,
+  `gender` varchar(10) DEFAULT NULL,
+  `age_min` smallint(5) unsigned DEFAULT NULL,
+  `age_max` smallint(5) unsigned DEFAULT NULL,
+  `suggestion` varchar(600) NOT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `sort_order` int(10) unsigned NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `clinical_rules_name_unique` (`name`),
+  KEY `clinical_rules_is_active_sort_order_index` (`is_active`,`sort_order`)
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `clinical_rules`
+--
+
+LOCK TABLES `clinical_rules` WRITE;
+/*!40000 ALTER TABLE `clinical_rules` DISABLE KEYS */;
+INSERT INTO `clinical_rules` VALUES
+(1,'Overweight (BMI ≥ 25)','vitals','warning','vital','bmi','gte',25.00,NULL,NULL,NULL,NULL,NULL,'Overweight: order fasting lipid profile, fasting glucose/HbA1c and TSH; measure waist circumference & BP; counsel diet + 150 min/week activity; set a weight target and review in 3 months.',1,0,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(2,'Obese (BMI ≥ 30)','vitals','warning','vital','bmi','gte',30.00,NULL,NULL,NULL,NULL,NULL,'Obese: order HbA1c, fasting lipid profile, LFT (fatty liver) and TSH; check BP & waist circumference; counsel structured weight management; consider specialist referral if comorbidities.',1,1,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(3,'High systolic BP (≥ 140)','vitals','warning','vital','bp_systolic','gte',140.00,NULL,NULL,NULL,NULL,NULL,'Systolic BP ≥ 140: repeat after 5 min rest in both arms. If persistent order ECG, fasting glucose, lipid profile, serum creatinine/electrolytes and urine routine; do fundus exam; recheck BP in 1–2 weeks before diagnosing hypertension.',1,2,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(4,'High diastolic BP (≥ 90)','vitals','warning','vital','bp_diastolic','gte',90.00,NULL,NULL,NULL,NULL,NULL,'Diastolic BP ≥ 90: repeat seated after rest. If persistent order ECG, renal profile, urine routine and lipids; assess target-organ damage; review in 1–2 weeks.',1,3,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(5,'High blood glucose (≥ 200)','lab','warning','vital','blood_glucose','gte',200.00,NULL,NULL,NULL,NULL,NULL,'Random glucose ≥ 200 mg/dL: confirm with fasting glucose + HbA1c; order lipid profile, serum creatinine and urine microalbumin; check urine ketones if symptomatic or very high.',1,4,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(6,'Low SpO₂ (≤ 94%)','vitals','urgent','vital','spo2','lte',94.00,NULL,NULL,NULL,NULL,NULL,'SpO₂ ≤ 94%: recheck on room air; start O₂ to target ≥ 94%; order chest X-ray, CBC and ECG; consider ABG; look for respiratory distress and escalate/refer if not improving.',1,5,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(7,'Fever (temp ≥ 100.4°F)','symptom','info','vital','temperature','gte',100.40,NULL,NULL,NULL,NULL,NULL,'Fever ≥ 100.4°F: order CBC with peripheral smear; in endemic areas send malaria antigen/smear, dengue NS1/IgM and Widal/typhoid; urine routine; add CRP if indicated; review hydration.',1,6,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(8,'Tachycardia (pulse ≥ 100)','vitals','info','vital','pulse','gte',100.00,NULL,NULL,NULL,NULL,NULL,'Pulse ≥ 100: recheck after rest; correlate with fever/pain/anxiety. If unexplained order ECG, CBC (anaemia) and TSH; check BP & SpO₂.',1,7,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(9,'Diabetes screening (age ≥ 45)','screening','info','demographic','age','gte',45.00,NULL,NULL,NULL,NULL,NULL,'Age ≥ 45: screen with fasting glucose or HbA1c; if normal repeat every 3 years (yearly if overweight or family history); also check BP and lipid profile.',1,8,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(10,'Colorectal screening (age ≥ 50)','screening','info','demographic','age','gte',50.00,NULL,NULL,NULL,NULL,NULL,'Age ≥ 50: offer colorectal cancer screening — FIT/FOBT every year, OR colonoscopy every 10 years (stool-DNA or CT colonography where available); start earlier if family history.',1,9,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(11,'Cervical screening (women ≥ 30)','screening','info','demographic','age','gte',30.00,NULL,NULL,'female',NULL,NULL,'Women ≥ 30: HPV test every 5 years OR Pap smear every 3 years (co-testing where available); continue to age 65.',1,10,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(12,'Breast screening (women ≥ 40)','screening','info','demographic','age','gte',40.00,NULL,NULL,'female',NULL,NULL,'Women ≥ 40: clinical breast exam + mammography every 1–2 years; teach breast self-awareness; earlier screening/MRI if strong family history.',1,11,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(13,'Elderly vaccines & fall risk (age ≥ 65)','vaccine','info','demographic','age','gte',65.00,NULL,NULL,NULL,NULL,NULL,'Age ≥ 65: give annual influenza + pneumococcal (PCV then PPSV23) vaccines; check Td/Tdap booster; assess fall risk, vision and bone density (DEXA); review polypharmacy.',1,12,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(14,'Tobacco use','counseling','warning','keyword',NULL,NULL,NULL,'tobacco,smoking,smoke,smoker,cigarette,bidi,beedi,gutka,khaini,pan masala,zarda',NULL,NULL,NULL,NULL,'Tobacco use: advise quit, offer nicotine replacement/counselling; examine oral cavity for premalignant lesions; if smoker with chronic cough order chest X-ray and consider spirometry (COPD); check baseline BP & lipids.',1,13,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(15,'Alcohol use','counseling','info','keyword',NULL,NULL,NULL,'alcohol,drinking,liquor,ethanol,whisky,beer',NULL,NULL,NULL,NULL,'Alcohol use: quantify units/week; screen with AUDIT or CAGE; order LFT, GGT and CBC (MCV); counsel; if dependent plan supervised withdrawal + thiamine.',1,14,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(16,'Chest pain','symptom','urgent','keyword',NULL,NULL,NULL,'chest pain,chest tightness,chest discomfort,retrosternal',NULL,NULL,NULL,NULL,'Chest pain: do ECG now and BP in both arms; send troponin (serial if ongoing), CBC and blood glucose; give aspirin if cardiac suspected; chest X-ray; refer/admit urgently if high-risk features (radiation, sweating, breathlessness).',1,15,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(17,'Breathlessness','symptom','warning','keyword',NULL,NULL,NULL,'breathless,breathlessness,dyspnea,dyspnoea,short of breath,sob,wheez',NULL,NULL,NULL,NULL,'Breathlessness: check SpO₂ and respiratory rate now; order chest X-ray, ECG and CBC; consider spirometry/PEFR (asthma/COPD) and BNP/echo if cardiac; nebulise if wheeze.',1,16,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(18,'Persistent cough (TB screen)','symptom','warning','keyword',NULL,NULL,NULL,'chronic cough,cough >2 weeks,cough since,persistent cough,productive cough,cough 2 week,cough 3 week',NULL,NULL,NULL,NULL,'Cough > 2 weeks: send sputum for AFB/CBNAAT (GeneXpert) ×2 and chest X-ray; ask about weight loss/night sweats; HIV test if risk; advise cough etiquette/isolation if TB suspected.',1,17,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(19,'Unintentional weight loss','symptom','warning','keyword',NULL,NULL,NULL,'weight loss,losing weight,lost weight,wt loss',NULL,NULL,NULL,NULL,'Unintentional weight loss: order CBC, ESR, blood glucose/HbA1c, TSH, chest X-ray and sputum AFB (TB); stool occult blood; HIV if risk; arrange age-appropriate malignancy screen.',1,18,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(20,'Headache','symptom','info','keyword',NULL,NULL,NULL,'headache,migraine,head ache',NULL,NULL,NULL,NULL,'Headache: measure BP; ask red flags (sudden worst-ever, fever + neck stiffness, new neuro deficit, early-morning vomiting, new onset age > 50). If any red flag → urgent CT/MRI + referral; otherwise treat and review.',1,19,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(21,'Polyuria / polydipsia (diabetes)','symptom','warning','keyword',NULL,NULL,NULL,'polyuria,polydipsia,excessive thirst,frequent urination,increased thirst,increased urination',NULL,NULL,NULL,NULL,'Polyuria/polydipsia: send fasting glucose + HbA1c (or random glucose); urine routine for sugar/ketones; serum creatinine and electrolytes; review for weight loss.',1,20,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(22,'Pedal oedema','symptom','info','keyword',NULL,NULL,NULL,'pedal edema,pedal oedema,leg swelling,ankle swelling,swelling of feet,feet swelling',NULL,NULL,NULL,NULL,'Pedal oedema: measure BP; order urine routine (proteinuria), serum creatinine, albumin and LFT; ECG/echo if cardiac cause; TSH; if unilateral examine for DVT.',1,21,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(23,'Possible pregnancy','symptom','info','keyword',NULL,NULL,NULL,'pregnan,amenorrhea,amenorrhoea,missed period,lmp',NULL,'female',NULL,NULL,'Possible pregnancy: confirm with urine β-hCG (serum if unclear); review all current drugs for teratogenicity before prescribing; start folic acid; arrange antenatal booking if confirmed.',1,22,'2026-11-22 09:25:46','2026-11-22 09:25:46'),
+(24,'Rheumatoid arthritis','symptom','warning','keyword',NULL,NULL,NULL,'rheumatoid,rheumatoid arthritis,morning stiffness,symmetrical joint,small joint pain,swollen joints,swelling of joints,swelling of hands,mcp joint,pip joint',NULL,NULL,NULL,NULL,'Suspected RA: order RF, anti-CCP, ESR, CRP and CBC; X-ray hands & feet; check LFT, renal profile and hepatitis B/C before DMARDs; refer rheumatology — early DMARD (methotrexate) prevents joint damage.',1,23,'2026-11-22 09:47:51','2026-11-22 09:47:51'),
+(25,'SLE / lupus','symptom','warning','keyword',NULL,NULL,NULL,'lupus,systemic lupus,malar rash,butterfly rash,discoid rash',NULL,NULL,NULL,NULL,'Suspected SLE: order ANA, anti-dsDNA, complement C3/C4, CBC (cytopenias), ESR, urine routine (proteinuria/casts) and serum creatinine; add anti-phospholipid antibodies if clots or pregnancy loss; refer rheumatology.',1,24,'2026-11-22 09:47:51','2026-11-22 09:47:51'),
+(26,'Gout / high uric acid','lab','warning','keyword',NULL,NULL,NULL,'gout,podagra,hyperuricemia,hyperuricaemia,high uric acid,raised uric acid,big toe pain,first toe swelling,tophi',NULL,NULL,NULL,NULL,'Suspected gout/hyperuricaemia: check serum uric acid, renal profile, fasting glucose & lipids; aspirate joint for urate crystals if effusion; X-ray chronic joints. Acute: NSAID or colchicine — do NOT start or stop urate-lowering drugs during an attack. Advise low-purine diet and limit alcohol.',1,25,'2026-11-22 09:47:51','2026-11-22 09:47:51'),
+(27,'Scleroderma / systemic sclerosis','symptom','warning','keyword',NULL,NULL,NULL,'scleroderma,systemic sclerosis,sclerodactyly,skin tightening,raynaud,digital ulcer',NULL,NULL,NULL,NULL,'Suspected scleroderma: order ANA, anti-Scl-70 and anti-centromere antibodies; monitor BP closely (scleroderma renal crisis); PFT with DLCO (ILD) and echo (pulmonary hypertension); nailfold capillaroscopy; refer rheumatology.',1,26,'2026-11-22 09:47:51','2026-11-22 09:47:51'),
+(28,'Autoimmune / connective-tissue disease','symptom','warning','keyword',NULL,NULL,NULL,'autoimmune,connective tissue,vasculitis,sjogren,sjögren,polymyalgia,myositis,dermatomyositis,mixed connective tissue',NULL,NULL,NULL,NULL,'Suspected autoimmune/CTD: order ANA profile, ESR, CRP, CBC, RF and urine routine; add disease-specific antibodies per picture (anti-Ro/La, ANCA, anti-Jo1, CPK for myositis); refer rheumatology.',1,27,'2026-11-22 09:47:51','2026-11-22 09:47:51'),
+(29,'Inflammatory arthritis / polyarthralgia','symptom','info','keyword',NULL,NULL,NULL,'arthritis,polyarthralgia,polyarthritis,joint pains,multiple joint pain,joint stiffness,painful joints',NULL,NULL,NULL,NULL,'Joint pain: characterise inflammatory vs mechanical and the pattern/number of joints; order ESR, CRP, CBC, RF, serum uric acid and X-ray of affected joints; if inflammatory add ANA/anti-CCP; refer if persistent or deforming.',1,28,'2026-11-22 09:47:51','2026-11-22 09:47:51'),
+(30,'Malignancy red flags','symptom','urgent','keyword',NULL,NULL,NULL,'cancer,malignancy,carcinoma,tumour,tumor,lump,breast lump,neck lump,abdominal mass,palpable mass,lymphadenopathy,enlarged lymph node,unexplained bleeding,blood in stool,blood in urine,hemoptysis,haemoptysis,dysphagia,difficulty swallowing,night sweats',NULL,NULL,NULL,NULL,'Cancer red flags: do CBC and ESR; image the site (USG/X-ray/CT as appropriate) and biopsy/FNAC any persistent lump or node; chest X-ray; order tumour markers only when site-directed; arrange urgent specialist referral — do not watch-and-wait.',1,29,'2026-11-22 09:47:51','2026-11-22 09:47:51');
+/*!40000 ALTER TABLE `clinical_rules` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-11-22 15:23:32
+INSERT IGNORE INTO `migrations` (migration,batch) VALUES
+('2026_11_22_120000_create_clinical_rules_table',99),
+('2026_11_22_130000_add_rheum_malignancy_clinical_rules',99);

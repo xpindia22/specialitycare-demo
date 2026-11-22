@@ -12,9 +12,14 @@ class AiAssistantController extends Controller
     {
         $request->validate(['message' => 'required|string|max:3000']);
 
-        $apiKey = env('ANTHROPIC_API_KEY') ?: $this->readEnvKey('ANTHROPIC_API_KEY');
+        // Each install pays for its own usage: prefer the key the buyer entered
+        // under Settings → AI Assistant. The .env value is only a fallback for
+        // the vendor's own installs (home/nvme/dev) that set it directly —
+        // buyer installs won't have that value at all, so they must configure
+        // their own key for this to work.
+        $apiKey = setting('ai_assistant_api_key') ?: (env('ANTHROPIC_API_KEY') ?: $this->readEnvKey('ANTHROPIC_API_KEY'));
         if (!$apiKey) {
-            return response()->json(['error' => 'AI assistant is not configured. Please add ANTHROPIC_API_KEY to .env'], 503);
+            return response()->json(['error' => 'AI assistant is not configured. Add your Anthropic API key under Settings → AI Assistant.'], 503);
         }
 
         $encounter->load([

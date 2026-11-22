@@ -3,12 +3,15 @@
 @section('title','Create Bill')
 @section('page-title','Create Bill')
 @section('content')
+
 <div class="page-header">
     <div class="page-header-left"><h1>Create New Bill</h1></div>
+    @include('billing._toolbar', ['inline'=>true])
 </div>
 
 <form method="POST" action="{{ route('billing.store') }}" id="bill-form">
 @csrf
+@include('opd._fee-note', ['q' => $feeQuote ?? null])
 @if($patient)
 <input type="hidden" name="patient_id" value="{{ $patient->id }}">
 @endif
@@ -121,6 +124,11 @@
                 </tr>
             </table>
 
+            <div class="form-group">
+                <label class="form-label">Bill Date</label>
+                <input type="date" name="bill_date" class="form-control" value="{{ old('bill_date', today()->toDateString()) }}" max="{{ today()->toDateString() }}" onchange="var p=document.getElementById('bill-pay-date');if(p&&!p.dataset.touched)p.value=this.value">
+            </div>
+
             {{-- Insurance / TPA --}}
             <div class="form-group">
                 <label class="form-label">Insurance Company <span style="font-size:11px;color:var(--sc-muted)">(if applicable)</span></label>
@@ -145,6 +153,11 @@
                     <option value="NEFT">NEFT / Bank Transfer</option>
                     <option value="Cheque">Cheque</option>
                 </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Payment Date</label>
+                <input type="date" name="payment_date" id="bill-pay-date" class="form-control" oninput="this.dataset.touched=1" value="{{ old('payment_date', today()->toDateString()) }}" max="{{ today()->toDateString() }}">
             </div>
 
             <div class="form-group">

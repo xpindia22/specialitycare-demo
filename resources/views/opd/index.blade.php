@@ -4,6 +4,11 @@
 @section('page-title','Reception Queue')
 @section('content')
 
+<div class="page-header">
+    <div class="page-header-left"><h1>Reception Queue</h1></div>
+    @include('opd._toolbar', ['inline'=>true])
+</div>
+
 {{-- Stats bar --}}
 <div class="opd-stats">
     <div class="opd-stat opd-stat-total">  <div class="opd-stat-num">{{ $stats['total'] }}</div>          <div class="opd-stat-lbl">Total Today</div></div>
@@ -11,10 +16,7 @@
     <div class="opd-stat opd-stat-active"> <div class="opd-stat-num">{{ $stats['in_consultation'] }}</div> <div class="opd-stat-lbl">In Consultation</div></div>
     <div class="opd-stat opd-stat-done">   <div class="opd-stat-num">{{ $stats['done'] }}</div>            <div class="opd-stat-lbl">Done</div></div>
     <div class="opd-stat opd-stat-skip">   <div class="opd-stat-num">{{ $stats['skipped'] }}</div>         <div class="opd-stat-lbl">Skipped</div></div>
-    <a href="{{ route('opd.register') }}" class="btn btn-outline ms-auto" target="_blank"><i class="fa-solid fa-book-open me-1"></i>Daily Register</a>
-    <a href="{{ route('opd.board') }}" class="btn btn-outline" target="_blank"><i class="fa-solid fa-display me-1"></i>Queue Board</a>
-    <a href="{{ route('opd.doctor') }}" class="btn btn-primary"><i class="fa-solid fa-stethoscope me-1"></i>Doctor View</a>
-    <span id="refresh-badge" style="font-size:11px;color:#999;white-space:nowrap"><i class="fa-solid fa-rotate" style="font-size:10px"></i> refreshing in <span id="refresh-countdown">45</span>s</span>
+    <span id="refresh-badge" style="margin-left:auto;font-size:11px;color:#999;white-space:nowrap"><i class="fa-solid fa-rotate" style="font-size:10px"></i> refreshing in <span id="refresh-countdown">45</span>s</span>
 </div>
 
 @if(session('success'))
@@ -53,7 +55,8 @@
                             <div class="fw-600">{{ $apt->patient->first_name }} {{ $apt->patient->last_name }}</div>
                             <div style="font-size:11px;color:#666">{{ $apt->patient->jhc_id }}</div>
                         </td>
-                        <td style="font-size:12px">{{ $apt->doctor ? 'Dr. '.$apt->doctor->first_name.' '.$apt->doctor->last_name : '—' }}</td>
+                        <td style="font-size:12px">{{ $apt->doctor ? 'Dr. '.$apt->doctor->first_name.' '.$apt->doctor->last_name : '—' }}
+                            @if($apt->department)<div style="font-size:11px;color:{{ $apt->department->color ?: '#666' }}"><i class="fa-solid {{ $apt->department->icon ?: 'fa-hospital' }}"></i> {{ $apt->department->name }}</div>@endif</td>
                         <td><span class="badge badge-grey">{{ $apt->type }}</span></td>
                         <td style="font-size:12px;color:#555">{{ $apt->chief_complaint ?: '—' }}</td>
                         <td>
@@ -79,6 +82,12 @@
             <div class="card-header d-flex align-items-center gap-2">
                 <strong>Today's Queue — {{ today()->format('d M Y') }}</strong>
                 <form method="GET" action="{{ route('opd.index') }}" class="ms-auto d-flex gap-2 align-items-center">
+                    <select name="department_id" class="form-control form-control-sm" onchange="this.form.submit()" style="min-width:160px">
+                        <option value="">All Specialities</option>
+                        @foreach($departments as $dep)
+                            <option value="{{ $dep->id }}" {{ $deptId == $dep->id ? 'selected':'' }}>{{ $dep->name }}</option>
+                        @endforeach
+                    </select>
                     <select name="doctor_id" class="form-control form-control-sm" onchange="this.form.submit()" style="min-width:160px">
                         <option value="">All Doctors</option>
                         @foreach($doctors as $d)
@@ -110,7 +119,8 @@
                             <div class="fw-600">{{ $t->patient->first_name }} {{ $t->patient->last_name }}</div>
                             <div style="font-size:11px;color:#666">{{ $t->patient->jhc_id }}</div>
                         </td>
-                        <td style="font-size:12px">{{ $t->doctor ? 'Dr. '.$t->doctor->first_name.' '.$t->doctor->last_name : '—' }}</td>
+                        <td style="font-size:12px">{{ $t->doctor ? 'Dr. '.$t->doctor->first_name.' '.$t->doctor->last_name : '—' }}
+                            @if($t->department)<div style="font-size:11px;color:{{ $t->department->color ?: '#666' }}"><i class="fa-solid {{ $t->department->icon ?: 'fa-hospital' }}"></i> {{ $t->department->name }}</div>@endif</td>
                         <td style="font-size:12px">{{ $t->purpose ?: '—' }}</td>
                         <td>
                             @if($t->priority === 'urgent')

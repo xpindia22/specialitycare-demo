@@ -6,10 +6,27 @@
 
 <div class="page-header">
     <div class="page-header-left"><h1>Wards &amp; Beds</h1></div>
-    @if(auth()->user()->isAdmin())
-    <a href="{{ route('wards.create') }}" class="btn btn-primary"><i class="fa-solid fa-plus me-1"></i>Add Ward</a>
-    @endif
+    @include('ipd._toolbar', ['inline'=>true, 'extra' => (auth()->user()->isAdmin() ? [
+        ['url'=>route('wards.create'), 'icon'=>'fa-plus', 'label'=>'Add Ward', 'bg'=>'#047857'],
+    ] : [])])
 </div>
+
+{{-- As-of date selector --}}
+<form method="GET" class="no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+    <label class="text-small text-muted" style="align-self:center">Bed status as of</label>
+    <input type="date" name="date" value="{{ $asOf }}" max="{{ today()->toDateString() }}" class="form-control" style="width:160px">
+    <button type="submit" class="btn btn-primary btn-sm">View</button>
+    <a href="{{ route('wards.index') }}" class="btn btn-outline btn-sm {{ !$isHistorical ? 'btn-primary' : '' }}"><i class="fa-solid fa-bolt"></i> Live (Today)</a>
+    <a href="{{ route('wards.index', ['date'=>today()->subDay()->toDateString()]) }}" class="btn btn-outline btn-sm"><i class="fa-solid fa-calendar-minus"></i> Yesterday</a>
+    <a href="{{ route('wards.index', ['date'=>today()->subDays(7)->toDateString()]) }}" class="btn btn-outline btn-sm"><i class="fa-solid fa-calendar-week"></i> Last Week</a>
+    <a href="{{ route('wards.index', ['date'=>today()->subDays(30)->toDateString()]) }}" class="btn btn-outline btn-sm"><i class="fa-solid fa-calendar-days"></i> Last Month</a>
+</form>
+
+@if($isHistorical)
+<div class="alert no-print" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;padding:10px 14px;border-radius:6px;margin-bottom:14px">
+    <i class="fa-solid fa-clock-rotate-left"></i> Occupancy <strong>as of {{ $asOfDate->format('d M Y') }}</strong> (from admission history). Reserved / maintenance are live-only and shown as Available for past dates.
+</div>
+@endif
 
 {{-- Summary bar --}}
 <div class="bed-summary-bar">
@@ -44,10 +61,16 @@
         </div>
     </div>
 
+    @php
+        $activeBeds  = $ward->beds->where('is_active', true);
+        $wOccupied   = $isHistorical ? $activeBeds->filter(fn($b) => isset($admissions[$b->id]))->count() : $ward->occupied_beds_count;
+        $wAvailable  = $isHistorical ? ($activeBeds->count() - $wOccupied) : $ward->available_beds_count;
+    @endphp
     {{-- Bed mini-map --}}
     <div class="bed-mini-map">
-        @forelse($ward->beds->where('is_active',true) as $bed)
-        <div class="bed-mini bed-{{ $bed->status }}" title="{{ $bed->bed_number }} — {{ $bed->status_label }}">
+        @forelse($activeBeds as $bed)
+        @php $bs = $isHistorical ? (isset($admissions[$bed->id]) ? 'occupied' : 'available') : $bed->status; @endphp
+        <div class="bed-mini bed-{{ $bs }}" title="{{ $bed->bed_number }} — {{ $isHistorical ? ucfirst($bs) : $bed->status_label }}">
             {{ $bed->bed_number }}
         </div>
         @empty
@@ -56,8 +79,8 @@
     </div>
 
     <div class="ward-card-footer">
-        <span class="wf-available"><i class="fa-solid fa-circle" style="color:#16a34a;font-size:9px"></i> {{ $ward->available_beds_count }} available</span>
-        <span class="wf-occupied"><i class="fa-solid fa-circle" style="color:#dc2626;font-size:9px"></i> {{ $ward->occupied_beds_count }} occupied</span>
+        <span class="wf-available"><i class="fa-solid fa-circle" style="color:#16a34a;font-size:9px"></i> {{ $wAvailable }} available</span>
+        <span class="wf-occupied"><i class="fa-solid fa-circle" style="color:#dc2626;font-size:9px"></i> {{ $wOccupied }} occupied</span>
         <span class="wf-total" style="margin-left:auto">{{ $ward->total_beds_count }} total</span>
     </div>
 </div>

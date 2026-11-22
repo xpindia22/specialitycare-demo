@@ -64,5 +64,26 @@
             </div>
         </form>
     </div>
+
+    @if(auth()->user()?->isOwner())
+    <div style="background:var(--sc-surface);border:1px solid var(--sc-border);border-radius:10px;padding:18px">
+        <div style="font-size:12px;font-weight:600;color:var(--sc-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Special Permissions</div>
+        <form method="POST" action="{{ route('users.delete-visits', $user) }}">
+            @csrf
+            @if($user->isOwner())
+                <p class="text-small"><i class="fa-solid fa-crown" style="color:#d97706"></i> Owner: can always delete visits and see Deleted Visits.</p>
+            @else
+            <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-weight:normal">
+                <input type="checkbox" name="can_delete_visits" value="1" {{ $user->can_delete_visits ? 'checked' : '' }} style="margin-top:3px">
+                <span><b>Can delete visits</b><br>
+                <span class="text-small text-muted">Shows a Delete Visit button on each visit. Deleted visits are hidden, not erased: only you can see, restore or permanently delete them under Deleted Visits.</span></span>
+            </label>
+            <div style="margin-top:12px;text-align:right">
+                <button class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+            </div>
+            @endif
+        </form>
+    </div>
+    @endif
 </div>
 @endsection

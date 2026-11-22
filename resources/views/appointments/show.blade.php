@@ -3,6 +3,9 @@
 @section('title','Appointment')
 @section('page-title','Appointment Details')
 @section('content')
+
+@include('reception._toolbar')
+
 <div class="page-header">
     <div class="page-header-left">
         <h1>Appointment — <span class="mono">{{ $appointment->appointment_no }}</span></h1>
@@ -16,8 +19,10 @@
         <form method="POST" action="{{ route('appointments.checkin', $appointment) }}" style="display:inline">@csrf<button class="btn btn-amber">Check In</button></form>
     @elseif($appointment->status === 'Checked-In')
         <a href="{{ route('appointments.start-encounter', $appointment) }}" class="btn btn-primary">Start Visit</a>
-    @elseif($appointment->status === 'In-Progress')
+    @elseif($appointment->status === 'In-Progress' && $appointment->encounter)
         <a href="{{ route('encounters.show', $appointment->encounter) }}" class="btn btn-amber"><i class="fa-solid fa-stethoscope"></i> Continue Visit</a>
+    @elseif($appointment->status === 'In-Progress')
+        <a href="{{ route('appointments.start-encounter', $appointment) }}" class="btn btn-primary"><i class="fa-solid fa-play"></i> Start Visit</a>
     @elseif($appointment->status === 'Completed' && $appointment->encounter)
         <a href="{{ route('encounters.show', $appointment->encounter) }}" class="btn btn-outline"><i class="fa-solid fa-stethoscope"></i> View / Edit Encounter</a>
     @endif
@@ -68,7 +73,7 @@
             <form method="POST" action="{{ route('appointments.cancel', $appointment) }}" onsubmit="return confirm('Cancel this appointment?')">
                 @csrf
                 <div class="form-group" style="margin-bottom:8px">
-                    <input type="text" name="cancel_reason" class="form-control" placeholder="Reason for cancellation..." required>
+                    <input type="text" name="reason" class="form-control" placeholder="Reason for cancellation..." required>
                 </div>
                 <button type="submit" class="btn btn-danger btn-sm"><i class="fa-solid fa-ban"></i> Cancel Appointment</button>
             </form>

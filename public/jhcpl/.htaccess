@@ -1,0 +1,10 @@
+# Marketing site at /specialitycare/jhcpl/ is pure static HTML.
+# The nvme vhost sets `DirectoryIndex index.php` for the whole specialitycare
+# alias, which makes /jhcpl/ fall through to Laravel and 404. Re-declare
+# index.html here so this subfolder serves correctly, and turn off mod_rewrite
+# inside this directory so Laravel's catch-all doesn't intercept assets.
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+    RewriteEngine Off
+</IfModule>

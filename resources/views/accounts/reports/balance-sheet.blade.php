@@ -3,6 +3,8 @@
 @section('page-title','Balance Sheet')
 @section('content')
 
+@include('accounts._toolbar')
+
 <div class="page-header">
     <div class="page-header-left">
         <a href="{{ route('accounts.index') }}" class="text-small"><i class="fa-solid fa-arrow-left"></i> Accounts</a>
@@ -16,6 +18,13 @@
     <div><label>As on</label><input type="date" name="upto" value="{{ $upto->toDateString() }}" class="form-control"></div>
     <button class="btn btn-primary">Show</button>
 </form>
+
+@if(!empty($boD))
+    <div class="alert alert-info text-small" style="margin-bottom:12px">
+        <i class="fa-solid fa-circle-info"></i> Books opening date <strong>{{ $boD->format('d-M-Y') }}</strong> is active —
+        vouchers before this date are excluded; their position is carried by each ledger's opening balance.
+    </div>
+@endif
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
     <div class="card">

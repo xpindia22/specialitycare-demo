@@ -88,6 +88,12 @@ return [
             'icon'        => 'fa-comments',
             'enabled_by_default' => false,
         ],
+        'ai_assistant' => [
+            'label'       => 'AI Clinical Assistant',
+            'description' => 'Claude-powered assistant on the encounter screen for differential diagnoses, drug interaction checks, and clinical decision support. Requires the buyer to configure their own Anthropic API key under Settings — calls are billed to that key, not the vendor\'s.',
+            'icon'        => 'fa-robot',
+            'enabled_by_default' => false,
+        ],
     ],
 
     // Owner panel access. Set OWNER_KEY in .env to a long random string.

@@ -9,9 +9,9 @@
         <h1>Prescription Templates</h1>
         <div class="breadcrumb">Save common prescription sets for quick reuse</div>
     </div>
-    <button class="btn btn-primary" onclick="openAddModal()">
-        <i class="fa-solid fa-plus"></i> New Template
-    </button>
+    @include('templates._toolbar', ['inline'=>true, 'extra' => [
+        ['url'=>'#', 'onclick'=>'openAddModal();return false;', 'icon'=>'fa-plus', 'label'=>'New Template', 'bg'=>'#047857'],
+    ]])
 </div>
 
 @if(session('success'))

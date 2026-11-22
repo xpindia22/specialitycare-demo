@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Accounts;
 
 use App\Http\Controllers\Controller;
 use App\Services\GstrJsonExporter;
+use App\Services\VoucherService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -139,7 +140,16 @@ class GstReportsController extends Controller
         $year  = (int) ($request->query('year')  ?: now()->year);
         $from = Carbon::create($year, $month, 1)->startOfDay();
         $to   = $from->copy()->endOfMonth()->endOfDay();
-        return [$from, $to, $from->format('M Y')];
+        $monthYear = $from->format('M Y'); // label reflects the requested month
+
+        // Books opening date floor: never include pre-cutover vouchers. For a month
+        // entirely before the cutover this leaves $from > $to → no rows (intended).
+        $boD = app(VoucherService::class)->booksOpeningDate();
+        if ($boD && $boD->gt($from)) {
+            $from = $boD;
+        }
+
+        return [$from, $to, $monthYear];
     }
 
     private function salesRows(Carbon $from, Carbon $to)

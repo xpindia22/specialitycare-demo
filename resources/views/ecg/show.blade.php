@@ -3,6 +3,8 @@
 @section('title', 'ECG '.$ecg->record_no)
 @section('page-title','ECG Report')
 @section('content')
+
+@include('diagnostics._toolbar')
 <div class="page-header">
     <div class="page-header-left"><h1>ECG Report — <span class="mono">{{ $ecg->record_no }}</span></h1></div>
     <a href="{{ route('ecg.edit', $ecg) }}" class="btn btn-primary"><i class="fa-solid fa-pencil me-1"></i> Edit</a>

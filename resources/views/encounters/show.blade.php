@@ -2,36 +2,48 @@
 @extends('layouts.app')
 @section('title', 'Encounter '.$encounter->encounter_no)
 @section('page-title', 'Clinical Visit')
+@section('patient-context')
+@include('partials._patient_ctx', ['patient' => $encounter->patient, 'active' => 'encounter'])
+@endsection
 @section('content')
 
-<div class="page-header">
-    <div class="page-header-left">
+<div class="page-header" style="flex-wrap:wrap;gap:8px;align-items:center">
+    <div class="page-header-left" style="flex:1;min-width:200px">
         <h1>Clinical Visit — <span class="mono">{{ $encounter->encounter_no }}</span></h1>
         <div class="breadcrumb">
             <a href="{{ route('patients.show', $encounter->patient) }}">{{ $encounter->patient->full_name }}</a>
              › Visit on {{ $encounter->encounter_date->format('d M Y') }}
         </div>
     </div>
+    {{-- OPD nav --}}
+    <a href="{{ route('opd.index') }}"    class="btn btn-sm" style="background:#0369a1;color:#fff;border-color:#0369a1;white-space:nowrap"><i class="fa-solid fa-users-line"></i> Reception Queue</a>
+    <a href="{{ route('opd.doctor') }}"   class="btn btn-sm" style="background:#15803d;color:#fff;border-color:#15803d;white-space:nowrap"><i class="fa-solid fa-stethoscope"></i> Doctor View</a>
+    <a href="{{ route('opd.board') }}"    class="btn btn-sm" style="background:#6d28d9;color:#fff;border-color:#6d28d9;white-space:nowrap"><i class="fa-solid fa-display"></i> Queue Board</a>
+    <a href="{{ route('opd.register') }}" class="btn btn-sm" style="background:#334155;color:#fff;border-color:#334155;white-space:nowrap"><i class="fa-solid fa-book-open"></i> Daily Register</a>
+    <a href="{{ route('glucose.index', $encounter->patient) }}" class="btn btn-sm" style="background:#0891b2;color:#fff;border-color:#0891b2;white-space:nowrap"><i class="fa-solid fa-droplet"></i> Diabetes Diary</a>
+    <a href="{{ route('bp.index', $encounter->patient) }}"      class="btn btn-sm" style="background:#dc2626;color:#fff;border-color:#dc2626;white-space:nowrap"><i class="fa-solid fa-heart-pulse"></i> BP Diary</a>
+    <a href="{{ route('health.index', $encounter->patient) }}"  class="btn btn-sm" style="background:#059669;color:#fff;border-color:#059669;white-space:nowrap"><i class="fa-solid fa-heart"></i> Health Tracker</a>
+    {{-- Visit actions --}}
     @if($encounter->status === 'Open')
-    <a href="{{ route('admissions.create', ['patient_id' => $encounter->patient_id, 'doctor_id' => $encounter->doctor_id]) }}" class="btn btn-amber">
+    <a href="{{ route('admissions.create', ['patient_id' => $encounter->patient_id, 'doctor_id' => $encounter->doctor_id]) }}" class="btn btn-sm btn-amber">
         <i class="fa-solid fa-bed-pulse"></i> Admit
     </a>
-    <form method="POST" action="{{ route('encounters.complete', $encounter) }}">
+    <form method="POST" action="{{ route('encounters.complete', $encounter) }}" style="display:inline">
         @csrf
-        <button type="submit" class="btn btn-success" onclick="return confirm('Mark this encounter as complete?')">
-            <i class="fa-solid fa-circle-check"></i> Complete Visit
+        <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Mark this encounter as complete?')">
+            <i class="fa-solid fa-circle-check"></i> Complete
         </button>
     </form>
     @endif
     @if($encounter->bill)
-        <a href="{{ route('billing.show', $encounter->bill) }}" class="btn btn-amber">
+        <a href="{{ route('billing.show', $encounter->bill) }}" class="btn btn-sm btn-amber">
             <i class="fa-solid fa-file-invoice"></i> View Bill
         </a>
     @else
-        <button type="button" class="btn btn-amber" onclick="openQuickBill()">
+        <button type="button" class="btn btn-sm btn-amber" onclick="openQuickBill()">
             <i class="fa-solid fa-file-invoice-dollar"></i> Quick Bill
         </button>
-        <a href="{{ route('billing.create', ['patient_id' => $encounter->patient_id, 'encounter_id' => $encounter->id]) }}" class="btn btn-outline btn-sm" title="Full billing form">
+        <a href="{{ route('billing.create', ['patient_id' => $encounter->patient_id, 'encounter_id' => $encounter->id]) }}" class="btn btn-sm btn-outline" title="Full billing form">
             <i class="fa-solid fa-arrow-up-right-from-square"></i>
         </a>
     @endif
@@ -47,11 +59,142 @@
             'from_encounter'  => $encounter->id,
         ]);
     @endphp
-    <a href="{{ route('appointments.create', $followUpQuery) }}" class="btn btn-primary" title="Book a follow-up appointment for this patient">
-        <i class="fa-solid fa-calendar-plus"></i> Book Follow-up
+    <a href="{{ route('appointments.create', $followUpQuery) }}" class="btn btn-sm btn-primary" title="Book a follow-up appointment for this patient">
+        <i class="fa-solid fa-calendar-plus"></i> Follow-up
     </a>
-    <span class="badge {{ $encounter->status === 'Completed' ? 'badge-green' : 'badge-amber' }}" style="font-size:13px;padding:8px 14px">{{ $encounter->status }}</span>
+    @unless($encounter->trashed())
+    <button type="button" class="btn btn-sm" style="background:#7c3aed;color:#fff;border-color:#7c3aed;white-space:nowrap" title="Refer to another department or doctor"
+            onclick="document.getElementById('refer-modal').classList.add('open');refFilterDoctors()">
+        <i class="fa-solid fa-share-from-square"></i> Refer
+    </button>
+    @endunless
+    <span class="badge {{ $encounter->status === 'Completed' ? 'badge-green' : 'badge-amber' }}" style="font-size:12px;padding:6px 12px">{{ $encounter->status }}</span>
+    @if(!$encounter->trashed() && auth()->user()?->canDeleteVisits())
+    <button type="button" class="btn btn-sm btn-outline" style="color:var(--sc-red);border-color:var(--sc-red);white-space:nowrap"
+            onclick="document.getElementById('delete-visit-modal').classList.add('open')" title="Delete this visit">
+        <i class="fa-solid fa-trash"></i> Delete Visit
+    </button>
+    @endif
 </div>
+
+@include('encounters._referral')
+
+@if($encounter->trashed())
+{{-- Deleted visit: owner-only view --}}
+<div class="alert alert-keep" style="background:#fef2f2;border:2px solid var(--sc-red);color:#7f1d1d;border-radius:8px;padding:14px 20px;margin-bottom:16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+    <div><i class="fa-solid fa-trash" style="font-size:1.5rem;color:var(--sc-red)"></i></div>
+    <div style="flex:1;min-width:220px">
+        <div class="fw-700" style="font-size:15px">DELETED VISIT: hidden from all lists and reports</div>
+        <div style="font-size:13px;margin-top:2px">
+            Deleted by {{ $encounter->deletedBy?->name ?? 'unknown' }} on {{ $encounter->deleted_at->timezone('Asia/Kolkata')->format('d M Y, h:i A') }}
+            @if($encounter->delete_reason) &middot; Reason: <b>{{ $encounter->delete_reason }}</b>@endif
+        </div>
+        <div style="font-size:12px;margin-top:2px">Changes cannot be saved on a deleted visit. Restore it first to edit.</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <form method="POST" action="{{ route('encounters.restore', $encounter) }}" onsubmit="return confirm('Restore visit {{ $encounter->encounter_no }}?')">
+            @csrf
+            <button type="submit" class="btn btn-sm btn-success"><i class="fa-solid fa-rotate-left"></i> Restore</button>
+        </form>
+        <button type="button" class="btn btn-sm" style="background:var(--sc-red);border-color:var(--sc-red);color:#fff"
+                onclick="document.getElementById('purge-visit-modal').classList.add('open')">
+            <i class="fa-solid fa-trash-can"></i> Delete permanently
+        </button>
+        <a href="{{ route('encounters.deleted') }}" class="btn btn-sm btn-outline"><i class="fa-solid fa-list"></i> Deleted Visits</a>
+    </div>
+</div>
+
+{{-- Permanent delete modal (owner only, deleted visits only) --}}
+<div id="purge-visit-modal" class="modal-overlay">
+    <div class="modal-box" style="max-width:520px">
+        <div class="modal-header">
+            <i class="fa-solid fa-trash-can" style="color:var(--sc-red)"></i>
+            <h3>Permanently delete {{ $encounter->encounter_no }}</h3>
+            <button class="modal-close" onclick="document.getElementById('purge-visit-modal').classList.remove('open')">&times;</button>
+        </div>
+        <form method="POST" action="{{ route('encounters.force-destroy', $encounter) }}"
+              onsubmit="return confirm('PERMANENTLY delete visit {{ $encounter->encounter_no }} of {{ addslashes($encounter->patient->full_name) }}?\n\nIt can no longer be restored.')">
+            @csrf @method('DELETE')
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;font-size:13px">
+                <div>The visit and its diagnoses, prescriptions, notes and uploaded reports are erased for good. Vitals readings stay in the patient's history.</div>
+                @if($encounter->appointment || $encounter->opd_token_id)
+                <div style="display:flex;flex-direction:column;gap:6px">
+                    @if($encounter->appointment)
+                    <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+                        <input type="checkbox" name="delete_appointment" value="1" checked>
+                        Also delete appointment {{ $encounter->appointment->appointment_no }} this visit came from
+                    </label>
+                    @endif
+                    @if($encounter->opd_token_id)
+                    <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+                        <input type="checkbox" name="delete_token" value="1" checked>
+                        Also delete its OPD token
+                    </label>
+                    @endif
+                </div>
+                @endif
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('purge-visit-modal').classList.remove('open')">Cancel</button>
+                <button type="submit" class="btn" style="background:var(--sc-red);border-color:var(--sc-red);color:#fff"><i class="fa-solid fa-trash-can"></i> Delete permanently</button>
+            </div>
+        </form>
+    </div>
+</div>
+@elseif(auth()->user()?->canDeleteVisits())
+@php
+    $delBlockers = \App\Http\Controllers\EncounterController::deleteBlockers($encounter);
+    $delFollowUp = \App\Http\Controllers\EncounterController::autoFollowUpOf($encounter);
+    $delSourceAppt = \App\Http\Controllers\EncounterController::sourceAppointmentOf($encounter);
+@endphp
+{{-- Delete Visit Modal --}}
+<div id="delete-visit-modal" class="modal-overlay">
+    <div class="modal-box" style="max-width:520px">
+        <div class="modal-header">
+            <i class="fa-solid fa-trash" style="color:var(--sc-red)"></i>
+            <h3>Delete Visit {{ $encounter->encounter_no }}</h3>
+            <button class="modal-close" onclick="document.getElementById('delete-visit-modal').classList.remove('open')">&times;</button>
+        </div>
+        <form method="POST" action="{{ route('encounters.destroy', $encounter) }}"
+              onsubmit="return confirm('Delete visit {{ $encounter->encounter_no }} of {{ addslashes($encounter->patient->full_name) }}?')">
+            @csrf @method('DELETE')
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;font-size:13px">
+                <div>{{ $encounter->patient->full_name }} &middot; {{ $encounter->encounter_date->format('d M Y') }} &middot; {{ $encounter->status }}</div>
+                @if($delBlockers)
+                    <div class="alert alert-danger" style="margin:0">
+                        <i class="fa-solid fa-circle-xmark"></i>
+                        <div>This visit has {{ implode(', ', $delBlockers) }}. Delete or move {{ count($delBlockers) > 1 ? 'them' : 'it' }} first, then delete the visit.</div>
+                    </div>
+                @else
+                    <div>The visit, with its notes, diagnoses and prescriptions, disappears from all lists and reports. The clinic owner can still see and restore it.</div>
+                    <div class="form-group" style="margin:0">
+                        <label class="form-label">Reason <span class="req">*</span></label>
+                        <input type="text" name="reason" class="form-control" required maxlength="255" placeholder="e.g. duplicate visit, wrong patient">
+                    </div>
+                    @if($delSourceAppt)
+                    <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+                        <input type="checkbox" name="cancel_appointment" value="1" checked>
+                        Also remove appointment {{ $delSourceAppt->appointment_no }} ({{ $delSourceAppt->appointment_date->format('d M Y') }}, {{ $delSourceAppt->status }}) from the appointments list
+                    </label>
+                    @endif
+                    @if($delFollowUp)
+                    <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+                        <input type="checkbox" name="cancel_follow_up" value="1" checked>
+                        Cancel follow-up {{ $delFollowUp->appointment_no }} booked for {{ $delFollowUp->appointment_date->format('d M Y') }}
+                    </label>
+                    @endif
+                @endif
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('delete-visit-modal').classList.remove('open')">Cancel</button>
+                @unless($delBlockers)
+                <button type="submit" class="btn" style="background:var(--sc-red);border-color:var(--sc-red);color:#fff"><i class="fa-solid fa-trash"></i> Delete Visit</button>
+                @endunless
+            </div>
+        </form>
+    </div>
+</div>
+@endif
 
 @if(session('encounter_completed'))
 <div class="alert alert-keep" style="background:#f0fdf4;border:1px solid #86efac;color:#14532d;border-radius:8px;padding:14px 20px;margin-bottom:16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
@@ -246,10 +389,42 @@
     </div>
 </div>
 
+<!-- CLINICAL REMINDERS (CDS) POPUP -->
+<div id="cds-popup" class="modal-overlay">
+    <div class="modal-box" style="max-width:560px">
+        <div class="modal-header" style="gap:10px">
+            <i class="fa-solid fa-bell" style="color:#f59e0b;font-size:18px"></i>
+            <h3 style="margin:0">Clinical Reminders</h3>
+            <span id="cds-popup-count" class="badge" style="background:#f59e0b;color:#fff"></span>
+            <button type="button" class="modal-close" onclick="cdsClosePopup()">&times;</button>
+        </div>
+        <div class="modal-body" style="padding:14px 20px">
+            <div style="font-size:11.5px;color:var(--sc-muted);margin-bottom:10px">
+                Based on this patient's age/sex, vitals and what you've charted. Advisory only — use clinical judgement.
+            </div>
+            <div id="cds-popup-list"></div>
+        </div>
+        <div style="padding:12px 20px;border-top:1px solid var(--sc-border);display:flex;justify-content:flex-end;gap:8px">
+            <button type="button" class="btn btn-primary btn-sm" onclick="cdsClosePopup()"><i class="fa-solid fa-check"></i> Got it</button>
+        </div>
+    </div>
+</div>
+
 <!-- MAIN CLINICAL TABS -->
 <div class="tab-container" id="enc-tabs">
     <div class="tab-nav">
         <button class="tab-btn active" data-tab="clinical"><i class="fa-solid fa-notes-medical"></i> Clinical Notes</button>
+        @php
+            $specForms = \App\Services\OpdForms::all();
+            $specShown = \App\Services\OpdForms::forEncounter($encounter);
+            $specSaved = $encounter->forms->keyBy('form');
+        @endphp
+        @foreach($specForms as $code => $def)
+        <button class="tab-btn spec-tab" data-tab="form-{{ $code }}" @unless(in_array($code, $specShown)) style="display:none" @endunless>
+            <i class="fa-solid {{ $def['icon'] }}"></i> {{ $def['short'] }}
+            @if($specSaved->has($code))<span class="badge badge-teal" style="font-size:10px">{{ count($specSaved[$code]->data ?? []) }}</span>@endif
+        </button>
+        @endforeach
         <button class="tab-btn" data-tab="diagnosis"><i class="fa-solid fa-diagnoses"></i> Diagnosis</button>
         <button class="tab-btn" data-tab="rx"><i class="fa-solid fa-prescription"></i> Prescriptions
             @php $rxCount = $encounter->prescriptions->count(); @endphp
@@ -271,10 +446,31 @@
         <button class="tab-btn" data-tab="notes"><i class="fa-solid fa-note-sticky"></i> Notes
             @if($encounter->encounterNotes->count())<span class="badge badge-teal" style="font-size:10px">{{ $encounter->encounterNotes->count() }}</span>@endif
         </button>
+        @if(count($specShown) < count($specForms) && !$encounter->trashed())
+        <select id="spec-add" class="form-control" style="width:auto;height:30px;padding:2px 8px;font-size:12px;margin:auto 0 auto 8px" onchange="addSpecForm(this)" title="Open another department's visit form">
+            <option value="">+ Speciality form</option>
+            @foreach($specForms as $code => $def)@unless(in_array($code, $specShown))<option value="{{ $code }}">{{ $def['title'] }}</option>@endunless @endforeach
+        </select>
+        @endif
     </div>
 
     <!-- CLINICAL NOTES TAB -->
     <div id="tab-clinical" class="tab-pane active">
+        <!-- Clinical reminders (CDS) live panel -->
+        <div id="cds-panel" class="card mb-3" style="display:none;border-left:4px solid #f59e0b">
+            <div class="card-header" style="cursor:pointer;gap:8px" onclick="document.getElementById('cds-panel-body').classList.toggle('hidden')">
+                <i class="fa-solid fa-bell" style="color:#f59e0b"></i>
+                Clinical Reminders
+                <span id="cds-panel-count" class="badge" style="background:#f59e0b;color:#fff"></span>
+                <span style="margin-left:auto;display:flex;gap:10px;align-items:center">
+                    <button type="button" class="btn btn-sm btn-outline" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();cdsOpenPopup()"><i class="fa-regular fa-window-restore"></i> Popup</button>
+                    <i class="fa-solid fa-chevron-down" style="font-size:11px"></i>
+                </span>
+            </div>
+            <div id="cds-panel-body" class="card-body" style="padding:10px 14px">
+                <div id="cds-panel-list"></div>
+            </div>
+        </div>
         <div class="card">
             <div class="card-header">
                 <i class="fa-solid fa-notes-medical"></i> Clinical History & Examination
@@ -285,6 +481,31 @@
                     <button type="button" class="btn btn-sm btn-primary" onclick="openEncTemplateModal()">
                         <i class="fa-solid fa-layer-group"></i> Apply Template
                     </button>
+                    <div style="position:relative;display:inline-block">
+                        <button type="button" class="btn btn-sm btn-outline" onclick="toggleClinicalPrintMenu(event)" title="Print all or some of these sections">
+                            <i class="fa-solid fa-print"></i> Print <i class="fa-solid fa-caret-down" style="font-size:10px"></i>
+                        </button>
+                        <div id="clinical-print-menu" class="ch-print-menu" style="display:none">
+                            @php $ptVisitCount = \App\Models\Encounter::where('patient_id', $encounter->patient_id)->count(); @endphp
+                            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--sc-muted);margin-bottom:2px">Print</div>
+                            <label><input type="radio" name="cp-scope" value="this" checked> This visit only</label>
+                            <label><input type="radio" name="cp-scope" value="all"> All visits, date-wise ({{ $ptVisitCount }})</label>
+                            <label style="padding-left:22px;font-size:12px;color:var(--sc-muted)">
+                                <select id="cp-order" style="border:1px solid var(--sc-border);border-radius:5px;padding:2px 4px;font-size:12px">
+                                    <option value="asc">Oldest first</option>
+                                    <option value="desc">Newest first</option>
+                                </select>
+                            </label>
+                            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--sc-muted);margin:8px 0 2px;border-top:1px solid var(--sc-border);padding-top:8px">Sections</div>
+                            <label style="font-weight:700;border-bottom:1px solid var(--sc-border);padding-bottom:6px;margin-bottom:4px">
+                                <input type="checkbox" id="cp-all" checked onchange="document.querySelectorAll('.cp-sec').forEach(c => c.checked = this.checked)"> All sections
+                            </label>
+                            @foreach(\App\Http\Controllers\EncounterController::CLINICAL_PRINT_SECTIONS as $code => $label)
+                            <label><input type="checkbox" class="cp-sec" value="{{ $code }}" checked onchange="document.getElementById('cp-all').checked = [...document.querySelectorAll('.cp-sec')].every(c => c.checked)"> {{ $label }}</label>
+                            @endforeach
+                            <button type="button" class="btn btn-sm btn-primary" style="margin-top:8px;width:100%" onclick="printClinicalSections()"><i class="fa-solid fa-print"></i> Print selected</button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div id="clinical-draft-banner" style="display:none;padding:10px 16px;background:rgba(245,166,35,.1);border-bottom:1px solid var(--sc-border);font-size:12.5px;display:none;align-items:center;gap:12px">
@@ -299,29 +520,59 @@
             <div class="card-body">
                 <form onsubmit="saveClinical(event)">
 
-                    {{-- Section: History --}}
-                    <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--sc-muted);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--sc-border)">
-                        <i class="fa-solid fa-clock-rotate-left" style="color:var(--sc-teal)"></i> History
+                    {{-- Topics stacked one below the other; each title is a link that opens its form. --}}
+                    <div class="ch-topic-tools">
+                        <a href="#" onclick="return setAllChTopics(true)">Open all</a> · <a href="#" onclick="return setAllChTopics(false)">Close all</a>
                     </div>
-                    <div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:16px;margin-bottom:20px">
-                        <div class="form-group" style="flex:1;min-width:280px;margin-bottom:0">
-                            <label class="form-label">Chief Complaint</label>
+                    <div class="ch-group"><i class="fa-solid fa-clock-rotate-left" style="color:var(--sc-teal)"></i> History</div>
+                    <div class="form-group ch-topic" data-topic="chief_complaint">
+                        <a href="#" class="form-label ch-topic-link" onclick="return toggleChTopic(this)">
+                            <i class="fa-solid fa-chevron-right ch-caret"></i>
+                            <span class="ch-topic-title">Chief Complaint</span>
+                            <span class="ch-topic-preview"></span>
+                        </a>
+                        <div class="ch-topic-body">
                             <div id="cq-chief-complaint" class="clinical-quill"></div>
                         </div>
-                        <div class="form-group" style="flex:1;min-width:280px;margin-bottom:0">
-                            <label class="form-label">History of Present Illness</label>
+                    </div>
+                    <div class="form-group ch-topic" data-topic="history_of_present_illness">
+                        <a href="#" class="form-label ch-topic-link" onclick="return toggleChTopic(this)">
+                            <i class="fa-solid fa-chevron-right ch-caret"></i>
+                            <span class="ch-topic-title">History of Present Illness</span>
+                            <span class="ch-topic-preview"></span>
+                        </a>
+                        <div class="ch-topic-body">
                             <div id="cq-hopi" class="clinical-quill"></div>
                         </div>
-                        <div class="form-group" style="flex:1;min-width:280px;margin-bottom:0">
-                            <label class="form-label">Past Medical History</label>
+                    </div>
+                    <div class="form-group ch-topic" data-topic="past_medical_history">
+                        <a href="#" class="form-label ch-topic-link" onclick="return toggleChTopic(this)">
+                            <i class="fa-solid fa-chevron-right ch-caret"></i>
+                            <span class="ch-topic-title">Past Medical History</span>
+                            <span class="ch-topic-preview"></span>
+                        </a>
+                        <div class="ch-topic-body">
                             <div id="cq-pmh" class="clinical-quill"></div>
                         </div>
-                        <div class="form-group" style="flex:1;min-width:280px;margin-bottom:0">
-                            <label class="form-label">Family History</label>
+                    </div>
+                    <div class="form-group ch-topic" data-topic="family_history">
+                        <a href="#" class="form-label ch-topic-link" onclick="return toggleChTopic(this)">
+                            <i class="fa-solid fa-chevron-right ch-caret"></i>
+                            <span class="ch-topic-title">Family History</span>
+                            <span class="ch-topic-preview"></span>
+                        </a>
+                        <div class="ch-topic-body">
                             <div id="cq-fh" class="clinical-quill"></div>
                         </div>
-                        <div class="form-group" style="flex:1;min-width:280px;margin-bottom:0">
-                            <label class="form-label">Allergies <span style="font-size:10px;color:var(--sc-muted);font-weight:400">(saved to patient record)</span></label>
+                    </div>
+                    <div class="form-group ch-topic" data-topic="allergies">
+                        <a href="#" class="form-label ch-topic-link" onclick="return toggleChTopic(this)">
+                            <i class="fa-solid fa-chevron-right ch-caret"></i>
+                            <span class="ch-topic-title">Allergies</span>
+                            <span class="ch-topic-preview"></span>
+                            <span style="font-size:10px;color:var(--sc-muted);font-weight:400;margin-left:auto">(saved to patient record)</span>
+                        </a>
+                        <div class="ch-topic-body">
                             <div id="allergy-tags-wrap" style="border:1px solid var(--sc-border);border-radius:8px;padding:8px;background:#fff;min-height:42px">
                                 <div id="allergy-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
                                     @foreach($patientAllergyRecords as $pa)
@@ -358,51 +609,73 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="form-group" style="flex:1;min-width:280px;margin-bottom:0">
-                            <label class="form-label">Social History</label>
+                    </div>
+                    <div class="form-group ch-topic" data-topic="social_history">
+                        <a href="#" class="form-label ch-topic-link" onclick="return toggleChTopic(this)">
+                            <i class="fa-solid fa-chevron-right ch-caret"></i>
+                            <span class="ch-topic-title">Social History</span>
+                            <span class="ch-topic-preview"></span>
+                        </a>
+                        <div class="ch-topic-body">
                             <div id="cq-sh" class="clinical-quill"></div>
                         </div>
                     </div>
-
-                    {{-- Section: Examination --}}
-                    <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--sc-muted);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--sc-border)">
-                        <i class="fa-solid fa-stethoscope" style="color:var(--sc-teal)"></i> Examination
+                    <div class="ch-group"><i class="fa-solid fa-stethoscope" style="color:var(--sc-teal)"></i> Examination</div>
+                    <div class="form-group ch-topic" data-topic="examination_findings">
+                        <a href="#" class="form-label ch-topic-link" onclick="return toggleChTopic(this)">
+                            <i class="fa-solid fa-chevron-right ch-caret"></i>
+                            <span class="ch-topic-title">Examination</span>
+                            <span class="ch-topic-preview"></span>
+                        </a>
+                        <div class="ch-topic-body">
+                            <div id="cq-exam" class="clinical-quill" style="min-height:140px"></div>
+                        </div>
                     </div>
-                    <div class="form-group" style="margin-bottom:20px">
-                        <div id="cq-exam" class="clinical-quill" style="min-height:140px"></div>
-                    </div>
-
-                    {{-- Section: Assessment & Plan --}}
-                    <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--sc-muted);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--sc-border)">
-                        <i class="fa-solid fa-lightbulb" style="color:var(--sc-teal)"></i> Assessment & Plan
-                    </div>
-                    <div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:16px;margin-bottom:20px">
-                        <div class="form-group" style="flex:1;min-width:280px;margin-bottom:0">
-                            <label class="form-label">Impression / Differential Diagnosis</label>
+                    <div class="ch-group"><i class="fa-solid fa-lightbulb" style="color:var(--sc-teal)"></i> Assessment &amp; Plan</div>
+                    <div class="form-group ch-topic" data-topic="impression">
+                        <a href="#" class="form-label ch-topic-link" onclick="return toggleChTopic(this)">
+                            <i class="fa-solid fa-chevron-right ch-caret"></i>
+                            <span class="ch-topic-title">Impression / Differential Diagnosis</span>
+                            <span class="ch-topic-preview"></span>
+                        </a>
+                        <div class="ch-topic-body">
                             <div id="cq-impression" class="clinical-quill"></div>
                         </div>
-                        <div class="form-group" style="flex:1;min-width:280px;margin-bottom:0">
-                            <label class="form-label">Plan</label>
+                    </div>
+                    <div class="form-group ch-topic" data-topic="plan">
+                        <a href="#" class="form-label ch-topic-link" onclick="return toggleChTopic(this)">
+                            <i class="fa-solid fa-chevron-right ch-caret"></i>
+                            <span class="ch-topic-title">Plan</span>
+                            <span class="ch-topic-preview"></span>
+                        </a>
+                        <div class="ch-topic-body">
                             <div id="cq-plan" class="clinical-quill"></div>
                         </div>
                     </div>
-
-                    {{-- Section: Follow-up --}}
-                    <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--sc-muted);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--sc-border)">
-                        <i class="fa-solid fa-calendar-check" style="color:var(--sc-teal)"></i> Follow-up
-                    </div>
+                    <div class="ch-group"><i class="fa-solid fa-calendar-check" style="color:var(--sc-teal)"></i> Follow-up</div>
+                    <div class="form-group ch-topic" data-topic="follow_up">
+                        <a href="#" class="form-label ch-topic-link" onclick="return toggleChTopic(this)">
+                            <i class="fa-solid fa-chevron-right ch-caret"></i>
+                            <span class="ch-topic-title">Follow-up</span>
+                            <span class="ch-topic-preview"></span>
+                        </a>
+                        <div class="ch-topic-body">
+                            <div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:16px">
                     <div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:16px;margin-bottom:20px">
                         <div class="form-group" style="flex:1;min-width:280px;margin-bottom:0">
-                            <label class="form-label">Follow-up Instructions</label>
+                            <label class="form-label" style="font-weight:500">Follow-up Instructions</label>
                             <textarea name="follow_up_instructions" class="form-control" rows="3">{{ $encounter->follow_up_instructions }}</textarea>
                         </div>
                         <div class="form-group" style="flex:1;min-width:280px;margin-bottom:0">
-                            <label class="form-label">Follow-up After (Days)</label>
+                            <label class="form-label" style="font-weight:500">Follow-up After (Days)</label>
                             <input type="number" name="follow_up_days" class="form-control" value="{{ $encounter->follow_up_days ?? 7 }}" min="0" placeholder="e.g. 7">
                             {{-- Default follow-up date = encounter date + 7 days (override here if needed). --}}
                             <div class="form-text" style="margin-top:8px">Specific date: <input type="date" name="follow_up_date" class="form-control" style="margin-top:4px" value="{{ ($encounter->follow_up_date ?: ($encounter->encounter_date ? $encounter->encounter_date->copy()->addDays(7) : now()->addDays(7)))->toDateString() }}"></div>
                         </div>
+                            </div>
+                        </div>
                     </div>
+
                     {{-- MLC Tagging --}}
                     <div class="card" style="margin-top:16px;border:1px solid #fca5a5;background:#fff7f7">
                         <div class="card-header" style="background:#fee2e2;color:#991b1b;font-size:13px;padding:10px 16px">
@@ -429,6 +702,10 @@
                     <div id="clinical-form-actions" style="display:flex;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--sc-border)">
                         <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Save Clinical Notes</button>
                         <button type="button" class="btn btn-outline" onclick="cancelClinicalEdit()"><i class="fa-solid fa-rotate-left"></i> Discard Changes</button>
+                        <label style="display:flex;align-items:center;gap:6px;margin-left:auto;font-size:12.5px;cursor:pointer" title="Saves Clinical notes, Vitals, Diagnoses and speciality forms to the server every 3 seconds while you type">
+                            <input type="checkbox" id="clinical-autosave-toggle" onchange="setClinicalAutoSave(this.checked)"> Auto-save every 3 s
+                        </label>
+                        <span id="clinical-autosave-status" style="align-self:center;font-size:12px;color:var(--sc-muted);min-width:120px"></span>
                     </div>
                 </form>
             </div>
@@ -482,7 +759,7 @@
                     @endforelse
                 </div>
                 <div id="diag-form-actions" style="display:none;gap:8px;margin-top:12px">
-                    <button type="button" class="btn btn-primary" onclick="saveDiagnoses()"><i class="fa-solid fa-save"></i> Save Diagnoses</button>
+                    <button type="button" class="btn btn-primary" id="diag-save-btn" onclick="saveDiagnoses()"><i class="fa-solid fa-save"></i> Save Diagnoses</button>
                     <button type="button" class="btn btn-outline" onclick="cancelDiagEdit()"><i class="fa-solid fa-xmark"></i> Cancel</button>
                 </div>
             </div>
@@ -501,6 +778,7 @@
                 <div class="card-actions">
                     <a href="{{ route('prescriptions.print', $rx) }}" class="btn btn-sm btn-outline" target="_blank"><i class="fa-solid fa-print"></i> Print</a>
                     <button type="button" class="btn btn-sm btn-outline" onclick="openEmailRxModal({{ $rx->id }})"><i class="fa-solid fa-envelope"></i> Email</button>
+                    <button type="button" class="btn btn-sm btn-outline" onclick="openWhatsAppRxModal({{ $rx->id }})"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
                     @if($rx->status !== 'Dispensed')
                     <button type="button" class="btn btn-sm btn-outline" title="Edit the whole prescription" onclick="editPrescription({{ $rx->id }})"><i class="fa-solid fa-pen-to-square"></i> Edit Prescription</button>
                     @if($encounter->prescriptions->where('status','!=','Dispensed')->count() > 1)
@@ -596,7 +874,7 @@
         {{-- Suggested lab order from applied encounter template (populated by JS) --}}
         <div id="suggested-lab-order" class="card mb-3" style="display:none;border:1.5px dashed var(--sc-teal);background:rgba(10,180,180,.04)">
             <div class="card-header">
-                <i class="fa-solid fa-layer-group" style="color:var(--sc-teal)"></i> Suggested Lab Order — from template
+                <i class="fa-solid fa-layer-group" style="color:var(--sc-teal)"></i> Suggested Lab Order — <span id="suggested-lab-order-title">from template</span>
                 <div class="card-actions">
                     <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('suggested-lab-order').style.display='none'">
                         <i class="fa-solid fa-times"></i> Dismiss
@@ -604,6 +882,9 @@
                 </div>
             </div>
             <div class="card-body">
+                {{-- Non-lab procedures (ECG/Echo/Chest X-ray) — links to that module's create
+                     form, not part of the lab order below since they're separate records --}}
+                <div id="suggested-lab-order-procedures" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
                 <div id="suggested-lab-order-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
                 <form id="suggested-lab-order-form" method="POST" action="{{ route('lab.store-order') }}">
                     @csrf
@@ -640,21 +921,38 @@
                         </tr>
                     </thead>
                     <tbody>
-                    @foreach($lo->items as $item)
+                    @php
+                        // Group this order's items by panel: a shaded panel-title row,
+                        // then its member test rows; loose tests last.
+                        $itemGroups  = $lo->items->groupBy(fn($it) => (int) ($it->lab_panel_id ?: 0));
+                        $orderedKeys = $itemGroups->keys()->sortBy(fn($k) => $k === 0 ? 1 : 0)->values();
+                    @endphp
+                    @foreach($orderedKeys as $gKey)
+                    @php $gItems = $itemGroups[$gKey]; $gPanel = $gKey ? optional($gItems->first())->panel : null; @endphp
+                    @if($gPanel)
+                        <tr><td colspan="6" style="background:#d6deea;color:#1f3a5f;font-weight:700;text-transform:uppercase;letter-spacing:.3px;font-size:11.5px;padding:7px 14px;border-bottom:1px solid #aebdd3">{{ $gPanel->name }}{{ $gPanel->short_code ? ' · '.$gPanel->short_code : '' }}</td></tr>
+                    @elseif($orderedKeys->count() > 1)
+                        <tr><td colspan="6" style="background:#eceff4;color:#475569;font-weight:700;text-transform:uppercase;letter-spacing:.3px;font-size:11px;padding:6px 14px;border-bottom:1px solid var(--sc-border)">Individual tests</td></tr>
+                    @endif
+                    @foreach($gItems as $item)
                         @php
                             $flagColors = ['N'=>'#22c55e','NEG'=>'#22c55e','H'=>'#f59e0b','L'=>'#f59e0b','ABN'=>'#f59e0b','HH'=>'#ef4444','LL'=>'#ef4444','POS'=>'#ef4444'];
                             $flagLabels = ['N'=>'Normal','NEG'=>'Negative','H'=>'High','L'=>'Low','ABN'=>'Abnormal','HH'=>'Critical High','LL'=>'Critical Low','POS'=>'Positive'];
                             $flag = $item->abnormal_flag ?: 'N';
                             $flagColor = $flagColors[$flag] ?? '#f59e0b';
                             $isAbnormal = !in_array($flag, ['N','NEG'], true);
+                            $res   = $item->results->first();
+                            $name  = $item->test?->name ?? ($res->parameter_name ?? $item->panel?->name ?? '—');
+                            $unit  = $item->test?->unit ?: ($res->unit ?? null);
+                            $range = $item->test?->normal_range ?: ($res->normal_range ?? null);
                         @endphp
                         <tr style="border-bottom:1px solid var(--sc-border);{{ $isAbnormal ? 'background:rgba(232,76,76,.05)' : '' }}">
-                            <td style="padding:9px 14px;font-weight:500">{{ $item->test?->name ?? $item->panel?->name ?? '—' }}</td>
+                            <td style="padding:9px 14px 9px 24px;font-weight:500">{{ $name }}</td>
                             <td style="padding:9px 14px;font-weight:700;color:{{ $isAbnormal ? $flagColor : 'var(--sc-navy)' }}">
                                 {{ $item->result_value ?? '—' }}
                             </td>
-                            <td style="padding:9px 14px;color:var(--sc-muted)">{{ $item->test?->unit ?? '—' }}</td>
-                            <td style="padding:9px 14px;color:var(--sc-muted)">{{ $item->test?->normal_range ?? '—' }}</td>
+                            <td style="padding:9px 14px;color:var(--sc-muted)">{{ $unit ?? '—' }}</td>
+                            <td style="padding:9px 14px;color:var(--sc-muted)">{{ $range ?? '—' }}</td>
                             <td style="padding:9px 14px">
                                 @if($isAbnormal)
                                     <span style="background:{{ $flagColor }};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">{{ $flagLabels[$flag] }}</span>
@@ -667,6 +965,7 @@
                             </td>
                         </tr>
                     @endforeach
+                    @endforeach
                     </tbody>
                 </table>
             </div>
@@ -674,6 +973,9 @@
         @endforeach
         <a href="{{ route('lab.create-order', ['patient_id' => $encounter->patient_id, 'encounter_id' => $encounter->id]) }}" class="btn btn-primary">
             <i class="fa-solid fa-flask-vial"></i> Create Lab Order
+        </a>
+        <a href="{{ route('lab.report.upload', ['patient_id' => $encounter->patient_id, 'encounter_id' => $encounter->id]) }}" class="btn btn-primary" style="background:#7c3aed;border-color:#7c3aed">
+            <i class="fa-solid fa-file-arrow-up"></i> Upload Lab Report (auto-read)
         </a>
     </div>
 
@@ -853,6 +1155,15 @@
 
     </div>
 
+    <!-- SPECIALITY FORMS (config/opd_forms.php) -->
+    @foreach($specForms as $code => $def)
+        @if(in_array($code, $specShown))
+            @include('encounters._speciality-form', ['code' => $code, 'def' => $def, 'saved' => $specSaved->get($code), 'prev' => \App\Services\OpdForms::previous($encounter, $code)])
+        @else
+            <template id="spec-tpl-{{ $code }}">@include('encounters._speciality-form', ['code' => $code, 'def' => $def, 'saved' => null, 'prev' => \App\Services\OpdForms::previous($encounter, $code)])</template>
+        @endif
+    @endforeach
+
     <!-- NOTES TAB -->
     <div id="tab-notes" class="tab-pane">
         {{-- Existing notes --}}
@@ -873,7 +1184,7 @@
                 <div class="note-edit-form" id="note-edit-{{ $note->id }}" style="display:none">
                     <div id="note-edit-quill-{{ $note->id }}" class="note-quill-edit" data-content="{{ e($note->body) }}" style="min-height:120px;background:#fff"></div>
                     <div style="display:flex;gap:8px;margin-top:8px">
-                        <button type="button" class="btn btn-primary btn-sm" onclick="saveNoteEdit({{ $note->id }})"><i class="fa-solid fa-check"></i> Save</button>
+                        <button type="button" class="btn btn-primary btn-sm" id="note-edit-save-btn-{{ $note->id }}" onclick="saveNoteEdit({{ $note->id }})"><i class="fa-solid fa-check"></i> Save</button>
                         <button type="button" class="btn btn-outline btn-sm" onclick="cancelNoteEdit({{ $note->id }})">Cancel</button>
                     </div>
                 </div>
@@ -893,7 +1204,7 @@
                 <div class="form-group" style="margin-bottom:12px">
                     <div id="new-note-quill" style="min-height:140px;background:#fff"></div>
                 </div>
-                <button type="button" class="btn btn-primary" onclick="saveNewNote()"><i class="fa-solid fa-save"></i> Save Note</button>
+                <button type="button" class="btn btn-primary" id="note-save-btn" onclick="saveNewNote()"><i class="fa-solid fa-save"></i> Save Note</button>
             </div>
         </div>
     </div>
@@ -913,6 +1224,7 @@
             <input type="hidden" name="encounter_id" value="{{ $encounter->id }}">
 
             <div class="modal-body" style="padding:18px 22px">
+                @include('opd._fee-note', ['q' => $feeQuote ?? null])
                 {{-- Encounter context strip --}}
                 <div style="background:var(--sc-bg);border-radius:8px;padding:10px 14px;margin-bottom:16px;display:flex;gap:16px;font-size:12.5px;color:var(--sc-muted);flex-wrap:wrap">
                     <span><i class="fa-solid fa-stethoscope" style="color:var(--sc-teal);margin-right:4px"></i>{{ $encounter->encounter_no }}</span>
@@ -969,6 +1281,10 @@
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
                     <div>
                         <div class="form-group">
+                            <label class="form-label">Bill Date</label>
+                            <input type="date" name="bill_date" id="qb-bill-date" class="form-control" value="{{ today()->toDateString() }}" max="{{ today()->toDateString() }}" onchange="var p=document.getElementById('qb-pay-date');if(p&&!p.dataset.touched)p.value=this.value">
+                        </div>
+                        <div class="form-group">
                             <label class="form-label">Discount %</label>
                             <input type="number" name="discount_percent" id="qb-discount" class="form-control" value="0" min="0" max="100" step="0.5" oninput="qbRecalc()">
                         </div>
@@ -981,6 +1297,10 @@
                                 <option value="Bank Transfer">Bank Transfer</option>
                                 <option value="Insurance">Insurance</option>
                             </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Payment Date</label>
+                            <input type="date" name="payment_date" id="qb-pay-date" class="form-control" value="{{ today()->toDateString() }}" max="{{ today()->toDateString() }}" oninput="this.dataset.touched=1">
                         </div>
                         <div class="form-group" style="margin-bottom:0">
                             <label class="form-label">Amount Paid (₹)</label>
@@ -1013,12 +1333,9 @@
                         </button>
                     </div>
                 </div>
-                <div class="form-group" style="margin-top:14px;margin-bottom:0">
-                    <label class="form-label">Notes</label>
-                    <textarea name="notes" class="form-control" rows="2" placeholder="Optional notes…"></textarea>
-                </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer" style="position:sticky;bottom:0;background:var(--sc-surface,#fff);z-index:2;align-items:center;flex-wrap:wrap">
+                <input type="text" name="notes" class="form-control" placeholder="Notes (optional)…" style="flex:1 1 180px;max-width:320px;margin-right:auto">
                 <button type="button" class="btn btn-outline" onclick="document.getElementById('quick-bill-modal').classList.remove('open')">Cancel</button>
                 <button type="submit" class="btn btn-primary" id="qb-submit-btn">
                     <i class="fa-solid fa-file-invoice-dollar"></i> Create Bill
@@ -1034,6 +1351,25 @@
 @push('styles')
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css">
 <style>
+/* Save buttons confirm in place (markSaved): green with a check mark, "Saved ..." */
+/* Speciality forms (eye, gynae, ortho, skin) */
+.spec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+.spec-card { margin: 0; }
+.spec-wide { grid-column: 1 / -1; }
+.spec-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+.spec-table th { font-size: 11px; font-weight: 600; color: var(--sc-muted); text-align: left; padding: 2px 4px; }
+.spec-table td { padding: 3px 4px; vertical-align: middle; }
+.spec-table .spec-label { font-size: 12.5px; font-weight: 500; white-space: nowrap; width: 1%; padding-right: 10px; }
+.spec-table .spec-eye { font-weight: 700; color: var(--sc-navy); width: 22px; }
+.spec-in { height: 32px; padding: 4px 8px; font-size: 13px; }
+textarea.spec-in { height: auto; }
+.spec-in.spec-warn { border-color: var(--sc-red); background: rgba(232,76,76,.06); }
+.spec-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0 12px; }
+.spec-fields .spec-full { grid-column: 1 / -1; }
+.spec-checks { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.spec-check { font-size: 12.5px; display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+@media (max-width: 640px) { .spec-grid { grid-template-columns: 1fr; } .spec-table .spec-label { white-space: normal; } }
+.btn.btn-saved, .btn.btn-saved:hover { background: var(--sc-green); border-color: var(--sc-green); color: #fff; }
 /* ── Single-scroll consult: stack all tab panes, keep tab-nav sticky as scroll-spy ── */
 #enc-tabs .tab-pane { display: block !important; scroll-margin-top: 90px; }
 #enc-tabs .tab-pane + .tab-pane { margin-top: 24px; padding-top: 18px; border-top: 2px dashed var(--sc-border); }
@@ -1069,6 +1405,21 @@
 /* Quill editor appearance to match app */
 #new-note-quill, .note-quill-edit { border:1px solid var(--sc-border);border-radius:8px;overflow:hidden;background:#fff; }
 .clinical-quill { border:1px solid var(--sc-border);border-radius:8px;background:#fff;overflow:visible; }
+.ch-topic-tools { text-align:right;font-size:12px;margin:-4px 0 6px; }
+.ch-topic-tools a { color:var(--sc-teal);text-decoration:none; }
+.ch-group { font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--sc-muted);margin:14px 0 4px;padding-bottom:6px;border-bottom:1px solid var(--sc-border); }
+.ch-topic { margin-bottom:0;border-bottom:1px solid var(--sc-border); }
+.ch-topic-link { display:flex;align-items:center;gap:8px;padding:9px 4px;margin:0;color:var(--sc-teal);text-decoration:none;cursor:pointer;font-size:13.5px; }
+.ch-topic-link:hover .ch-topic-title { text-decoration:underline; }
+.ch-topic-title { font-weight:600;white-space:nowrap; }
+.ch-caret { font-size:10px;width:10px;transition:transform .15s;color:var(--sc-muted); }
+.ch-topic.open .ch-caret { transform:rotate(90deg); }
+.ch-topic-preview { flex:1;min-width:0;color:var(--sc-muted);font-weight:400;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.ch-topic-preview.empty { font-style:italic;opacity:.7; }
+.ch-topic-body { display:none;padding:0 0 14px 18px; }
+.ch-topic.open .ch-topic-body { display:block; }
+.ch-print-menu { position:absolute;right:0;top:100%;margin-top:4px;z-index:50;background:#fff;border:1px solid var(--sc-border);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.12);padding:10px 12px;min-width:250px;text-align:left;font-weight:400;text-transform:none;letter-spacing:0; }
+.ch-print-menu label { display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--sc-text);padding:3px 0;cursor:pointer;white-space:nowrap; }
 /* Quick-pick chips above each clinical Quill */
 .cq-chips { display:flex;flex-wrap:wrap;gap:5px;margin:4px 0 6px; }
 .cq-chip { font-size:11px;padding:2px 9px;border-radius:14px;border:1px solid var(--sc-border);background:#fff;color:var(--sc-text);cursor:pointer;transition:all .15s;font-family:inherit; }
@@ -1141,7 +1492,8 @@ function saveVitals(e) {
     new FormData(e.target).forEach((v,k) => data[k] = v);
     $.post(`{{ url("/encounters") }}/${encounterId}/vitals`, data, function(res) {
         if (res.success) {
-            location.reload();
+            markSaved(e.target.querySelector('[type="submit"]'), 'Saved Vitals');
+            setTimeout(() => location.reload(), 800);
         }
     }).fail(() => alert('Failed to save vitals'));
 }
@@ -1168,21 +1520,271 @@ function cancelClinicalEdit() {
     CLINICAL_QUILL_FIELDS.forEach(({ key }) => { clinicalSnapshot[key] = clinicalQuills[key].root.innerHTML; });
 }
 
+function collectClinicalData(form) {
+    const data = {};
+    new FormData(form).forEach((v,k) => data[k] = v);
+    if (!form.querySelector('[name="is_mlc"]').checked) data['is_mlc'] = 0;
+    Object.entries(clinicalQuills).forEach(([key, q]) => { data[key] = q.root.innerHTML; });
+    return data;
+}
+
+function clinicalForm() { return document.querySelector('#tab-clinical form'); }
+
 function saveClinical(e) {
     e.preventDefault();
-    const data = {};
-    new FormData(e.target).forEach((v,k) => data[k] = v);
-    if (!e.target.querySelector('[name="is_mlc"]').checked) data['is_mlc'] = 0;
-    Object.entries(clinicalQuills).forEach(([key, q]) => { data[key] = q.root.innerHTML; });
+    const data = collectClinicalData(e.target);
+    const sent = JSON.stringify(data);
     $.post(`{{ url("/encounters") }}/${encounterId}/clinical`, data, function(res) {
         if (res.success) {
-            showToast('Clinical notes saved!', 'success');
-            // refresh snapshot so Discard reverts to this saved state
-            CLINICAL_QUILL_FIELDS.forEach(({ key }) => { clinicalSnapshot[key] = clinicalQuills[key].root.innerHTML; });
-            clearClinicalDraft();
+            markSaved(e.target.querySelector('[type="submit"]'), 'Saved Clinical Notes');
+            clinicalAfterSave(sent);
         }
     }).fail(function() {
         showToast('Failed to save clinical notes. Please try again.', 'error');
+    });
+}
+
+function clinicalAfterSave(sent) {
+    _clinicalLastSaved = sent;
+    // refresh snapshot so Discard reverts to this saved state
+    CLINICAL_QUILL_FIELDS.forEach(({ key }) => { clinicalSnapshot[key] = clinicalQuills[key].root.innerHTML; });
+    clearClinicalDraft();
+    setClinicalAutoSaveStatus('Saved ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'}));
+}
+
+// ---- CLINICAL: auto-save to the server every 3 s while typing (toggle remembered per browser) ----
+const CLINICAL_AUTOSAVE_MS = 3000;
+let _clinicalLastSaved = null;     // JSON of the last data the server has
+let _clinicalAutoSaveOn = true;
+let _clinicalAutoSaveBusy = false;
+
+function setClinicalAutoSaveStatus(text, isError) {
+    const el = document.getElementById('clinical-autosave-status');
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = isError ? 'var(--sc-red)' : 'var(--sc-muted)';
+}
+
+function setClinicalAutoSave(on) {
+    _clinicalAutoSaveOn = !!on;
+    try { localStorage.setItem('clinical_autosave', on ? '1' : '0'); } catch (e) {}
+    setClinicalAutoSaveStatus(on ? '' : 'Auto-save off');
+}
+
+function clinicalAutoSaveTick() {
+    if (!_clinicalAutoSaveOn || _clinicalAutoSaveBusy || _clinicalLastSaved === null) return;
+    const form = clinicalForm();
+    if (!form) return;
+    const data = collectClinicalData(form);
+    const sent = JSON.stringify(data);
+    if (sent === _clinicalLastSaved) return;
+    _clinicalAutoSaveBusy = true;
+    setClinicalAutoSaveStatus('Saving…');
+    data.autosave = 1;
+    $.post(`{{ url("/encounters") }}/${encounterId}/clinical`, data, function(res) {
+        if (res.success) clinicalAfterSave(sent);
+        else setClinicalAutoSaveStatus('Auto-save failed', true);
+    }).fail(function(xhr) {
+        setClinicalAutoSaveStatus(xhr.status === 419 ? 'Session expired — reload page' : 'Auto-save failed, retrying…', true);
+    }).always(function() { _clinicalAutoSaveBusy = false; });
+}
+
+function initClinicalAutoSave() {
+    try { _clinicalAutoSaveOn = localStorage.getItem('clinical_autosave') !== '0'; } catch (e) {}
+    const t = document.getElementById('clinical-autosave-toggle');
+    if (t) t.checked = _clinicalAutoSaveOn;
+    if (!_clinicalAutoSaveOn) setClinicalAutoSaveStatus('Auto-save off');
+    @if(!$encounter->trashed())
+    // Baseline after Quill has normalised the loaded HTML, so an untouched page never posts.
+    setTimeout(function () {
+        const form = clinicalForm();
+        if (form) _clinicalLastSaved = JSON.stringify(collectClinicalData(form));
+        setInterval(clinicalAutoSaveTick, CLINICAL_AUTOSAVE_MS);
+        initSectionAutoSave();
+    }, 600);
+    @endif
+}
+
+// ---- Auto-save for Vitals, Diagnoses and speciality forms: same 3 s timer and on/off switch as Clinical ----
+// Each saver: collect() -> payload string (null = nothing to save now), send(payload) -> jqXHR,
+// status element next to its Save button. The first payload seen is the baseline, so opening a form never posts.
+const _sectionSavers = [];
+
+function addSectionSaver(saver, saveBtn) {
+    saver.last = null;
+    saver.busy = false;
+    if (saveBtn) {
+        saver.statusEl = document.createElement('span');
+        saver.statusEl.style.cssText = 'align-self:center;margin:0 10px;font-size:12px;color:var(--sc-muted)';
+        saveBtn.after(saver.statusEl);
+    }
+    _sectionSavers.push(saver);
+    return saver;
+}
+
+function sectionSaverStatus(saver, text, isError) {
+    if (!saver.statusEl) return;
+    saver.statusEl.textContent = text;
+    saver.statusEl.style.color = isError ? 'var(--sc-red)' : 'var(--sc-muted)';
+}
+
+// After a manual Save, the saved payload becomes the new baseline (no duplicate auto-save).
+function sectionSaverSynced(saver) { if (saver) { const p = saver.collect(); if (p !== null) saver.last = p; } }
+
+function sectionSaversTick() {
+    document.querySelectorAll('form.spec-form').forEach(registerSpecFormSaver);   // forms added later
+    if (!_clinicalAutoSaveOn) return;
+    _sectionSavers.forEach(saver => {
+        if (saver.busy) return;
+        const payload = saver.collect();
+        if (payload === null) return;
+        if (saver.last === null) { saver.last = payload; return; }
+        if (payload === saver.last) return;
+        saver.busy = true;
+        sectionSaverStatus(saver, 'Saving…');
+        saver.send(payload).done(res => {
+            if (res && res.success) {
+                saver.last = payload;
+                sectionSaverStatus(saver, 'Auto-saved ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'}));
+                saver.after?.(res);
+            } else sectionSaverStatus(saver, 'Auto-save failed', true);
+        }).fail(xhr => {
+            sectionSaverStatus(saver, xhr.status === 419 ? 'Session expired — reload page' : (xhr.status === 422 ? 'Not saved — check the values' : 'Auto-save failed, retrying…'), true);
+        }).always(() => { saver.busy = false; });
+    });
+}
+
+let _vitalsSaver = null, _diagSaver = null;
+
+function initSectionAutoSave() {
+    const vf = document.getElementById('vitals-form');
+    if (vf) _vitalsSaver = addSectionSaver({
+        collect: () => $(vf).serialize(),
+        send: payload => $.post(`{{ url("/encounters") }}/${encounterId}/vitals`, payload + '&autosave=1'),
+        after: () => refreshVitalBoxes(vf),
+    }, vf.querySelector('[type="submit"]'));
+
+    const dc = document.getElementById('diagnoses-container');
+    if (dc) _diagSaver = addSectionSaver({
+        // only while editing, and only rows that have a name (the server needs at least one)
+        collect: () => {
+            if (dc.style.display === 'none') return null;
+            const rows = collectDiagnosisRows();
+            return rows.length ? JSON.stringify(rows) : null;
+        },
+        send: payload => $.post(`{{ url("/encounters") }}/${encounterId}/diagnoses`, { diagnoses: JSON.parse(payload), autosave: 1 }),
+        after: () => freezeDiagSnapshot(),
+    }, document.getElementById('diag-save-btn'));
+
+    document.querySelectorAll('form.spec-form').forEach(registerSpecFormSaver);
+    setInterval(sectionSaversTick, CLINICAL_AUTOSAVE_MS);
+}
+
+function registerSpecFormSaver(form) {
+    if (form._saver) return;
+    const btn = form.querySelector('[type="submit"]');
+    if (!btn) { form._saver = true; return; }          // read-only form
+    form._saver = addSectionSaver({
+        collect: () => $(form).serialize(),
+        send: payload => $.post(`{{ url('/encounters') }}/${encounterId}/forms/${form.dataset.form}`, payload + '&autosave=1'),
+    }, btn);
+}
+
+// Vitals: show the auto-saved values in the boxes above the form (Save Vitals still reloads the page).
+function refreshVitalBoxes(form) {
+    const v = n => (form.querySelector(`[name="${n}"]`)?.value || '').trim();
+    const boxes = document.querySelectorAll('#vitals-card .vital-box .vb-val');
+    if (boxes.length < 8) return;
+    const w = parseFloat(v('weight')), h = parseFloat(v('height'));
+    const vals = [
+        v('bp_systolic') && v('bp_diastolic') ? v('bp_systolic') + '/' + v('bp_diastolic') : '—',
+        v('pulse') || '—', v('temperature') || '—', v('spo2') ? v('spo2') + '%' : '—',
+        v('weight') || '—', v('height') || '—', (w && h) ? (w / ((h / 100) ** 2)).toFixed(2) : '—', v('blood_glucose') || '—',
+    ];
+    boxes.forEach((b, i) => { b.textContent = vals[i]; });
+}
+
+// Diagnoses: Cancel reverts to diagSnapshot (container HTML), so write the typed values into the
+// HTML attributes and re-take the snapshot: Cancel then goes back to the last auto-saved state.
+function freezeDiagSnapshot() {
+    const dc = document.getElementById('diagnoses-container');
+    dc.querySelectorAll('input').forEach(i => i.setAttribute('value', i.value));
+    dc.querySelectorAll('select').forEach(sel => [...sel.options].forEach(o => o.toggleAttribute('selected', o.selected)));
+    diagSnapshot = dc.innerHTML;
+}
+
+// ---- CLINICAL: topic links (one below the other; click opens the form) ----
+function toggleChTopic(link) {
+    const t = link.closest('.ch-topic');
+    t.classList.toggle('open');
+    if (t.classList.contains('open')) {
+        const q = clinicalQuills[t.dataset.topic];
+        if (q) setTimeout(() => q.focus(), 0);
+    }
+    return false;
+}
+
+function setAllChTopics(open) {
+    document.querySelectorAll('#tab-clinical .ch-topic').forEach(t => t.classList.toggle('open', open));
+    return false;
+}
+
+function updateChPreview(key) {
+    const t = document.querySelector(`#tab-clinical .ch-topic[data-topic="${key}"]`);
+    if (!t) return;
+    let text = '';
+    if (clinicalQuills[key]) {
+        text = clinicalQuills[key].getText().replace(/\s+/g, ' ').trim();
+    } else if (key === 'allergies') {
+        text = [...t.querySelectorAll('.allergy-tag')].map(a => a.firstChild.textContent.trim()).filter(Boolean).join(', ');
+    } else if (key === 'follow_up') {
+        const f = clinicalForm();
+        const ins = (f.querySelector('[name="follow_up_instructions"]').value || '').replace(/\s+/g, ' ').trim();
+        const d = f.querySelector('[name="follow_up_date"]').value;
+        text = [d ? 'on ' + new Date(d + 'T00:00').toLocaleDateString([], {day:'2-digit', month:'short', year:'numeric'}) : '', ins].filter(Boolean).join(' — ');
+    }
+    const el = t.querySelector('.ch-topic-preview');
+    el.textContent = text ? (text.length > 140 ? text.slice(0, 140) + '…' : text) : 'not filled';
+    el.classList.toggle('empty', !text);
+}
+
+function updateAllChPreviews() {
+    document.querySelectorAll('#tab-clinical .ch-topic').forEach(t => updateChPreview(t.dataset.topic));
+}
+
+// ---- CLINICAL: print all or some sections ----
+function toggleClinicalPrintMenu(ev) {
+    ev.stopPropagation();
+    const m = document.getElementById('clinical-print-menu');
+    m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', function (ev) {
+    const m = document.getElementById('clinical-print-menu');
+    if (m && m.style.display !== 'none' && !m.contains(ev.target)) m.style.display = 'none';
+});
+
+function printClinicalSections() {
+    const secs = [...document.querySelectorAll('.cp-sec:checked')].map(c => c.value);
+    if (!secs.length) { showToast('Tick at least one section to print.', 'error'); return; }
+    let url = `{{ route('encounters.clinical-print', $encounter) }}?s=` + secs.join(',');
+    if (document.querySelector('input[name="cp-scope"]:checked')?.value === 'all') {
+        url += '&all=1&order=' + document.getElementById('cp-order').value;
+    }
+    const win = window.open('about:blank', '_blank');   // open now, so the popup isn't blocked
+    const go = () => { if (win) win.location = url; else location.href = url; };
+    document.getElementById('clinical-print-menu').style.display = 'none';
+    // Print what is on screen: save unsaved edits first.
+    const form = clinicalForm();
+    const data = collectClinicalData(form);
+    const sent = JSON.stringify(data);
+    if (sent === _clinicalLastSaved) { go(); return; }
+    data.autosave = 1;
+    $.post(`{{ url("/encounters") }}/${encounterId}/clinical`, data, function (res) {
+        if (res.success) clinicalAfterSave(sent);
+        go();
+    }).fail(function () {
+        showToast('Could not save latest edits — printing the last saved version.', 'error');
+        go();
     });
 }
 
@@ -1469,11 +2071,9 @@ function cancelDiagEdit() {
     enterDiagReadMode();
 }
 
-function saveDiagnoses() {
-    const rows = document.querySelectorAll('.diagnosis-row');
-    if (!rows.length) { alert('Add at least one diagnosis'); return; }
+function collectDiagnosisRows() {
     const diagnoses = [];
-    rows.forEach(row => {
+    document.querySelectorAll('#diagnoses-container .diagnosis-row').forEach(row => {
         const name = row.querySelector('[name="diagnoses[name][]"]')?.value;
         if (name) diagnoses.push({
             name,
@@ -1482,10 +2082,19 @@ function saveDiagnoses() {
             status: row.querySelector('[name="diagnoses[status][]"]')?.value,
         });
     });
+    return diagnoses;
+}
+
+function saveDiagnoses() {
+    const rows = document.querySelectorAll('.diagnosis-row');
+    if (!rows.length) { alert('Add at least one diagnosis'); return; }
+    const diagnoses = collectDiagnosisRows();
     $.post(`{{ url("/encounters") }}/${encounterId}/diagnoses`, { diagnoses }, function(res) {
         if (res.success) {
-            showToast(`${res.count} diagnosis(es) saved!`, 'success');
-            enterDiagReadMode();
+            sectionSaverSynced(_diagSaver);
+            markSaved(document.getElementById('diag-save-btn'), 'Saved Diagnoses');
+            setTimeout(enterDiagReadMode, 1200);
+            fetchInvestigationSuggestions();
         }
     }).fail(() => alert('Failed to save diagnoses'));
 }
@@ -1854,7 +2463,7 @@ function doSavePrescription(data) {
             method: 'POST',
             data: { ...data, _method: 'PUT', _token: '{{ csrf_token() }}' },
             success: function(res) {
-                if (res.success) { showToast('Prescription updated', 'success'); setTimeout(() => location.reload(), 800); }
+                if (res.success) { markSaved(document.getElementById('rx-save-btn'), 'Saved Prescription'); setTimeout(() => location.reload(), 800); }
             },
             error: function() { alert('Failed to update prescription'); }
         });
@@ -1862,7 +2471,7 @@ function doSavePrescription(data) {
     }
     $.post(`{{ url("/encounters") }}/${encounterId}/prescription`, data, function(res) {
         if (res.success) {
-            showToast('Prescription saved: ' + res.prescription_no, 'success');
+            markSaved(document.getElementById('rx-save-btn'), 'Saved Prescription');
             setTimeout(() => location.reload(), 1000);
         }
     }).fail(() => alert('Failed to save prescription'));
@@ -1961,6 +2570,120 @@ function rxDrop(e, targetId) {
     if (src && src !== targetId) doMerge(src, targetId);
 }
 
+// ── Speciality forms (eye, gynae, ortho, skin) ─────────────────────────────
+function saveSpecForm(e) {
+    e.preventDefault();
+    const form = e.target, code = form.dataset.form;
+    const btns = form.querySelectorAll('[type="submit"]');
+    $.post(`{{ url('/encounters') }}/${encounterId}/forms/${code}`, $(form).serialize(), function (res) {
+        if (res.success) { btns.forEach(b => markSaved(b, 'Saved')); if (form._saver && form._saver !== true) sectionSaverSynced(form._saver); }
+    }).fail(() => showToast('Could not save the form. Please try again.', 'error'));
+}
+
+// Fill only the empty boxes from the last visit's form
+function copySpecForm(btn, data) {
+    const form = btn.closest('form');
+    let n = 0;
+    Object.entries(data).forEach(([k, v]) => {
+        if (Array.isArray(v)) {
+            form.querySelectorAll(`[name="f[${k}][]"]`).forEach(c => { if (v.includes(c.value) && !c.checked) { c.checked = true; n++; } });
+            return;
+        }
+        const el = form.querySelector(`[name="f[${k}]"]`);
+        if (el && !el.value) { el.value = v; n++; }
+    });
+    form.dispatchEvent(new Event('input', { bubbles: true }));
+    specWarnAll(form);
+    showToast(n ? `Copied ${n} value(s) from the last visit — check and save` : 'Nothing to copy (boxes already filled)', n ? 'success' : 'info');
+}
+
+function copyRefraction(form, from, to) {
+    ['r', 'l'].forEach(eye => ['sph', 'cyl', 'axis', 'add', 'va'].forEach(p => {
+        const src = form.querySelector(`[name="f[${from}_${eye}_${p}]"]`), dst = form.querySelector(`[name="f[${to}_${eye}_${p}]"]`);
+        if (src && dst && src.value !== '') dst.value = src.value;
+    }));
+    form.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function addSpecForm(sel) {
+    const code = sel.value;
+    if (!code) return;
+    const tpl = document.getElementById('spec-tpl-' + code);
+    if (tpl) {
+        document.getElementById('tab-notes').before(tpl.content.cloneNode(true));
+        tpl.remove();
+        const pane = document.getElementById('tab-form-' + code);
+        specInit(pane);
+        window.specSpyObserve?.(pane);
+    }
+    const btn = document.querySelector(`#enc-tabs .tab-btn[data-tab="form-${code}"]`);
+    if (btn) { btn.style.display = ''; btn.click(); }
+    sel.querySelector(`option[value="${code}"]`)?.remove();
+    sel.value = '';
+    if (sel.options.length <= 1) sel.remove();
+}
+
+// Dioptres shown as +1.25 / -0.75; out-of-range numbers outlined red
+function specFmtDioptre(el) {
+    const v = el.value.trim().replace(',', '.');
+    if (v === '' || /^(pl|plano)$/i.test(v)) { if (v) el.value = 'Plano'; return; }
+    const n = parseFloat(v);
+    if (isNaN(n)) return;
+    const q = Math.round(n * 4) / 4;
+    el.value = (q > 0 ? '+' : q < 0 ? '-' : '') + Math.abs(q).toFixed(2);
+    if (q === 0) el.value = el.dataset.part === 'sph' ? 'Plano' : '0.00';
+}
+function specWarn(el) {
+    const n = parseFloat(el.value);
+    const hi = el.dataset.warnAbove, lo = el.dataset.warnBelow;
+    el.classList.toggle('spec-warn', !isNaN(n) && ((hi !== undefined && n > +hi) || (lo !== undefined && n < +lo)));
+}
+function specWarnAll(root) { root.querySelectorAll('[data-warn-above],[data-warn-below]').forEach(specWarn); }
+
+// Gynae: EDD (LMP + 280 days) and gestational age from LMP
+function specLmp(form) {
+    const lmp = form.querySelector('[name="f[lmp]"]'), edd = form.querySelector('[name="f[edd]"]'), ga = form.querySelector('[name="f[ga]"]');
+    if (!lmp || !lmp.value) return;
+    const d = new Date(lmp.value + 'T00:00:00');
+    if (edd && (!edd.value || edd.dataset.auto === '1')) {
+        const e = new Date(d.getTime() + 280 * 864e5);
+        edd.value = e.toISOString().slice(0, 10); edd.dataset.auto = '1';
+    }
+    if (ga) {
+        const days = Math.floor((Date.now() - d.getTime()) / 864e5);
+        if (days >= 0 && days < 320) ga.value = `${Math.floor(days / 7)} wk ${days % 7} d`;
+    }
+}
+
+function specInit(root) {
+    root.querySelectorAll('.spec-dioptre').forEach(el => el.addEventListener('blur', () => specFmtDioptre(el)));
+    root.querySelectorAll('[data-warn-above],[data-warn-below]').forEach(el => el.addEventListener('input', () => specWarn(el)));
+    root.querySelectorAll('[name="f[edd]"]').forEach(el => el.addEventListener('input', () => { el.dataset.auto = '0'; }));
+    root.querySelectorAll('[name="f[lmp]"]').forEach(el => el.addEventListener('change', () => specLmp(el.form)));
+    specWarnAll(root);
+}
+document.querySelectorAll('.spec-form').forEach(f => specInit(f));
+
+// Save buttons confirm in place instead of a toast: green check + "Saved ...". The button
+// goes back to its "Save ..." text as soon as anything in its section is edited again.
+function markSaved(btn, label) {
+    if (!btn) return;
+    if (!btn.dataset.saveHtml) btn.dataset.saveHtml = btn.innerHTML;
+    btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${label}`;
+    btn.classList.add('btn-saved');
+    const scope = btn.closest('form, .modal, .note-card, .card, .tab-pane') || document;
+    if (btn._savedReset) btn._savedReset();
+    btn._savedReset = () => {
+        btn.innerHTML = btn.dataset.saveHtml;
+        btn.classList.remove('btn-saved');
+        scope.removeEventListener('input', btn._savedReset, true);
+        scope.removeEventListener('change', btn._savedReset, true);
+        btn._savedReset = null;
+    };
+    scope.addEventListener('input', btn._savedReset, true);
+    scope.addEventListener('change', btn._savedReset, true);
+}
+
 // Toast function
 function showToast(msg, type='success') {
     const t = document.createElement('div');
@@ -2008,6 +2731,7 @@ document.querySelectorAll('#enc-tabs .tab-btn[data-tab]').forEach(btn => {
         if (best) setActive(best.target.id.replace(/^tab-/, ''));
     }, { rootMargin: '-30% 0px -55% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] });
     panes.forEach(p => io.observe(p));
+    window.specSpyObserve = (p) => io.observe(p);   // speciality forms added later
 
     // On first load, restore the previously-active section (preserves muscle memory).
     const saved = localStorage.getItem(TAB_KEY);
@@ -2063,9 +2787,8 @@ function saveEditRx() {
         },
         success: function(res) {
             if (res.success) {
-                showToast('Prescription updated.', 'success');
-                closeEditRxModal();
-                setTimeout(() => location.reload(), 600);
+                markSaved(document.getElementById('edit-rx-save-btn'), 'Saved Changes');
+                setTimeout(() => { closeEditRxModal(); location.reload(); }, 800);
             }
         },
         error: function(xhr) {
@@ -2122,9 +2845,8 @@ function saveEditItem() {
     };
     $.post(`{{ url('/encounters') }}/${encounterId}/prescription-items/${_editingItemId}`, data, function(res) {
         if (res.success) {
-            showToast('Prescription updated.', 'success');
-            closeEditItemModal();
-            setTimeout(() => location.reload(), 800);
+            markSaved(document.getElementById('edit-item-save-btn'), 'Saved Changes');
+            setTimeout(() => { closeEditItemModal(); location.reload(); }, 800);
         }
     }).fail(() => alert('Failed to update.'));
 }
@@ -2188,7 +2910,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 mic.className = 'cq-mic-btn';
                 mic.title = 'Dictate (voice → text)';
                 mic.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-                mic.onclick = () => toggleVoice(key, mic);
+                mic.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); toggleVoice(key, mic); };
                 label.appendChild(mic);
             }
             const chips = CLINICAL_QUILL_CHIPS[key];
@@ -2203,7 +2925,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     c.onclick = () => insertIntoQuill(q, text);
                     chipsWrap.appendChild(c);
                 });
-                wrap.insertBefore(chipsWrap, wrap.querySelector('.ql-toolbar') || wrap.querySelector('#' + id));
+                const anchor = wrap.querySelector('.ql-toolbar') || wrap.querySelector('#' + id);
+                anchor.parentNode.insertBefore(chipsWrap, anchor);
             }
         }
 
@@ -2211,8 +2934,16 @@ document.addEventListener('DOMContentLoaded', function () {
         q.on('text-change', function () {
             clearTimeout(_clinicalAutoSaveTimer);
             _clinicalAutoSaveTimer = setTimeout(saveClinicalDraft, 800);
+            updateChPreview(key);
         });
     });
+
+    // Topic previews (follow-up and allergies are plain inputs, not Quills)
+    updateAllChPreviews();
+    clinicalForm()?.addEventListener('input', () => updateChPreview('follow_up'));
+    const allergyTags = document.getElementById('allergy-tags');
+    if (allergyTags) new MutationObserver(() => updateChPreview('allergies')).observe(allergyTags, { childList: true });
+    initClinicalAutoSave();
 
     // Recovery: if a draft from after the encounter's last update exists, prompt to restore.
     maybeOfferDraftRecovery();
@@ -2243,14 +2974,14 @@ function saveNewNote() {
             <div class="note-edit-form" id="note-edit-${n.id}" style="display:none">
                 <div id="note-edit-quill-${n.id}" class="note-quill-edit" style="min-height:120px;background:#fff"></div>
                 <div style="display:flex;gap:8px;margin-top:8px">
-                    <button type="button" class="btn btn-primary btn-sm" onclick="saveNoteEdit(${n.id})"><i class="fa-solid fa-check"></i> Save</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="note-edit-save-btn-${n.id}" onclick="saveNoteEdit(${n.id})"><i class="fa-solid fa-check"></i> Save</button>
                     <button type="button" class="btn btn-outline btn-sm" onclick="cancelNoteEdit(${n.id})">Cancel</button>
                 </div>
             </div>`;
         document.getElementById('note-body-' + n.id).innerHTML = n.body;
         document.getElementById('notes-list').prepend(card);
-        newQuill.setContents([]);
-        showToast('Note saved.', 'success');
+        newQuill.setContents([], 'silent');
+        markSaved(document.getElementById('note-save-btn'), 'Saved Note');
     }).fail(() => alert('Failed to save note.'));
 }
 
@@ -2286,8 +3017,8 @@ function saveNoteEdit(id) {
         success(res) {
             if (!res.success) return;
             document.getElementById('note-body-' + id).innerHTML = res.body;
-            cancelNoteEdit(id);
-            showToast('Note updated.', 'success');
+            markSaved(document.getElementById('note-edit-save-btn-' + id), 'Saved');
+            setTimeout(() => cancelNoteEdit(id), 1000);
         },
         error() { alert('Failed to update note.'); }
     });
@@ -2359,7 +3090,7 @@ function deleteNote(id) {
         </div>
         <div class="modal-footer">
             <button class="btn btn-outline" onclick="closeEditItemModal()">Cancel</button>
-            <button class="btn btn-primary" onclick="saveEditItem()"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+            <button class="btn btn-primary" id="edit-item-save-btn" onclick="saveEditItem()"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
         </div>
     </div>
 </div>
@@ -2382,7 +3113,7 @@ function deleteNote(id) {
         </div>
         <div class="modal-footer">
             <button class="btn btn-outline" onclick="closeEditRxModal()">Cancel</button>
-            <button class="btn btn-primary" onclick="saveEditRx()"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+            <button class="btn btn-primary" id="edit-rx-save-btn" onclick="saveEditRx()"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
         </div>
     </div>
 </div>
@@ -2423,6 +3154,37 @@ function deleteNote(id) {
 function openEmailRxModal(rxId) {
     document.getElementById('email-rx-form').action = '{{ url('/prescriptions') }}/' + rxId + '/email';
     document.getElementById('email-rx-modal').classList.add('open');
+}
+</script>
+
+{{-- WhatsApp Prescription Modal --}}
+<div id="whatsapp-rx-modal" class="modal-overlay">
+    <div class="modal-box" style="max-width:480px">
+        <div class="modal-header">
+            <i class="fa-brands fa-whatsapp" style="color:#25D366"></i>
+            <h3>Send Prescription via WhatsApp</h3>
+            <button class="modal-close" onclick="document.getElementById('whatsapp-rx-modal').classList.remove('open')">&times;</button>
+        </div>
+        <form id="whatsapp-rx-form" method="POST" action="">
+            @csrf
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+                <div class="form-group" style="margin:0">
+                    <label class="form-label">Send to <span class="req">*</span></label>
+                    <input type="text" name="phone" class="form-control" value="{{ $encounter->patient->phone ?? $encounter->patient->alt_phone ?? '' }}" required>
+                    <div class="text-muted" style="font-size:11px;margin-top:4px">Defaults to the patient's number — edit to send to a different one.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('whatsapp-rx-modal').classList.remove('open')">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fa-brands fa-whatsapp"></i> Send</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+function openWhatsAppRxModal(rxId) {
+    document.getElementById('whatsapp-rx-form').action = '{{ url('/prescriptions') }}/' + rxId + '/whatsapp';
+    document.getElementById('whatsapp-rx-modal').classList.add('open');
 }
 </script>
 
@@ -2740,6 +3502,88 @@ function openEncTemplateModal() {
     });
 }
 
+// Render the "Suggested Lab Order" card (Labs tab) from a set of panel/test
+// names — shared by applyEncounterTemplate() (template-driven) and
+// fetchInvestigationSuggestions() (diagnosis-driven). Each pill has its own
+// × to drop just that one item before placing the order; the whole card can
+// still be dismissed via the existing header button.
+function renderSuggestedLabOrder(panelNames, testNames, clinicalInfo, titleText, procedures) {
+    const wrap   = document.getElementById('suggested-lab-order');
+    const list   = document.getElementById('suggested-lab-order-list');
+    const fields = document.getElementById('suggested-lab-order-fields');
+    const clin   = document.getElementById('suggested-lab-clinical');
+    const title  = document.getElementById('suggested-lab-order-title');
+    const procWrap = document.getElementById('suggested-lab-order-procedures');
+    if (!wrap || !list || !fields) return;
+
+    panelNames = (panelNames || []).filter(Boolean);
+    testNames  = (testNames  || []).filter(Boolean);
+    procedures = (procedures || []).filter(p => p && p.name && p.url);
+    if (!panelNames.length && !testNames.length && !procedures.length) { wrap.style.display = 'none'; return; }
+
+    list.innerHTML   = '';
+    fields.innerHTML = '';
+
+    const addPill = (name, cls, icon) => {
+        const pill = document.createElement('span');
+        pill.className = cls;
+        pill.style.cssText = 'font-size:12px;padding:5px 6px 5px 10px;display:inline-flex;align-items:center;gap:6px';
+        pill.innerHTML = `${icon ? `<i class="fa-solid fa-layer-group"></i> ` : ''}${escapeHtml(name)}`;
+        const x = document.createElement('button');
+        x.type = 'button';
+        x.setAttribute('aria-label', 'Remove');
+        x.style.cssText = 'background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;color:inherit;opacity:.6;font-size:13px';
+        x.innerHTML = '&times;';
+        pill.appendChild(x);
+        list.appendChild(pill);
+        const inp = document.createElement('input');
+        inp.type = 'hidden'; inp.name = (icon ? 'panel_names[]' : 'test_names[]'); inp.value = name;
+        fields.appendChild(inp);
+        x.addEventListener('click', () => { pill.remove(); inp.remove(); if (!list.children.length) wrap.style.display = 'none'; });
+    };
+
+    panelNames.forEach(name => addPill(name, 'badge badge-teal', true));
+    testNames.forEach(name => addPill(name, 'badge badge-outline', false));
+
+    // Procedures (ECG/Echo/Chest X-ray) are separate records, not lab order
+    // items — render as direct links to that module's create form instead.
+    if (procWrap) {
+        procWrap.innerHTML = '';
+        procedures.forEach(p => {
+            const link = document.createElement('a');
+            link.href = p.url;
+            link.className = 'badge badge-teal';
+            link.style.cssText = 'font-size:12px;padding:5px 10px;text-decoration:none;display:inline-flex;align-items:center;gap:6px';
+            link.innerHTML = `<i class="fa-solid fa-heart-pulse"></i> ${escapeHtml(p.name)}`;
+            procWrap.appendChild(link);
+        });
+        procWrap.style.display = procedures.length ? 'flex' : 'none';
+    }
+
+    if (clin) clin.value = clinicalInfo || '';
+    if (title) title.textContent = titleText || '';
+    wrap.style.display = '';
+}
+
+// After a diagnosis is saved, fetch rule+AI based investigation suggestions
+// and populate the same Suggested Lab Order card. Silent no-op on failure —
+// this is a convenience, not a required step in saving the diagnosis.
+function fetchInvestigationSuggestions() {
+    fetch(`{{ url("/encounters") }}/${encounterId}/suggest-investigations`, { headers: { 'Accept': 'application/json' } })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(res => {
+            const panels = res.panels || [];
+            const tests  = res.tests  || [];
+            const procedures = res.procedures || [];
+            if (!panels.length && !tests.length && !procedures.length) return;
+            const dx = Array.from(document.querySelectorAll('#diag-read-view .diag-read-name'))
+                .map(el => el.textContent.trim()).filter(Boolean).join('; ');
+            const clinicalInfo = 'Dx: ' + dx + (res.ai_used ? ' (rule + AI suggested)' : ' (rule suggested)');
+            renderSuggestedLabOrder(panels, tests, clinicalInfo, 'based on diagnosis', procedures);
+        })
+        .catch(() => {});
+}
+
 function applyEncounterTemplate(tmpl) {
     let added = { cc:false, notes:false, dx:0, rx:0 };
 
@@ -2849,40 +3693,11 @@ function applyEncounterTemplate(tmpl) {
     const labTests  = (labs.tests  || []).filter(Boolean);
     const labPanels = (labs.panels || []).filter(Boolean);
     if (labTests.length || labPanels.length) {
-        const wrap   = document.getElementById('suggested-lab-order');
-        const list   = document.getElementById('suggested-lab-order-list');
-        const fields = document.getElementById('suggested-lab-order-fields');
-        const clin   = document.getElementById('suggested-lab-clinical');
-        if (wrap && list && fields) {
-            list.innerHTML   = '';
-            fields.innerHTML = '';
-            labPanels.forEach(name => {
-                const pill = document.createElement('span');
-                pill.className = 'badge badge-teal';
-                pill.style.cssText = 'font-size:12px;padding:5px 10px';
-                pill.innerHTML = `<i class="fa-solid fa-layer-group"></i> ${escapeHtml(name)}`;
-                list.appendChild(pill);
-                const inp = document.createElement('input');
-                inp.type = 'hidden'; inp.name = 'panel_names[]'; inp.value = name;
-                fields.appendChild(inp);
-            });
-            labTests.forEach(name => {
-                const pill = document.createElement('span');
-                pill.className = 'badge badge-outline';
-                pill.style.cssText = 'font-size:12px;padding:5px 10px';
-                pill.textContent = name;
-                list.appendChild(pill);
-                const inp = document.createElement('input');
-                inp.type = 'hidden'; inp.name = 'test_names[]'; inp.value = name;
-                fields.appendChild(inp);
-            });
-            // Build clinical_info from chief complaint + diagnoses (helps the lab tech)
-            const cc = (tmpl.chief_complaint || '').slice(0, 200);
-            const dx = (tmpl.diagnoses || []).join('; ');
-            if (clin) clin.value = (cc ? 'CC: ' + cc : '') + (dx ? ' | Dx: ' + dx : '');
-            wrap.style.display = '';
-            added.labs = labTests.length + labPanels.length;
-        }
+        const cc = (tmpl.chief_complaint || '').slice(0, 200);
+        const dx = (tmpl.diagnoses || []).join('; ');
+        const clinicalInfo = (cc ? 'CC: ' + cc : '') + (dx ? ' | Dx: ' + dx : '');
+        renderSuggestedLabOrder(labPanels, labTests, clinicalInfo, 'from template');
+        added.labs = labTests.length + labPanels.length;
     }
 
     const bits = [];
@@ -3053,6 +3868,9 @@ document.addEventListener('keydown', function(e) {
         if (typeof savePrescription === 'function') savePrescription();
     } else if (tab === 'tab-notes') {
         if (typeof saveNewNote === 'function') saveNewNote();
+    } else if (tab.startsWith('tab-form-')) {
+        const form = activePane.querySelector('form.spec-form');
+        if (form) form.requestSubmit();
     }
 });
 
@@ -3194,6 +4012,7 @@ document.getElementById('quick-bill-form')?.addEventListener('submit', function(
 @endif
 
 {{-- ── AI Clinical Assistant Panel ───────────────────────────────────────── --}}
+@if(app(\App\Services\LicenseService::class)->isEnabled('ai_assistant'))
 <div id="ai-panel" style="
     position:fixed;right:-420px;bottom:0;width:420px;height:100vh;
     background:var(--sc-card-bg,#fff);border-left:2px solid var(--sc-border,#e2e8f0);
@@ -3268,6 +4087,7 @@ document.getElementById('quick-bill-form')?.addEventListener('submit', function(
 " onmouseenter="this.style.transform='scale(1.1)'" onmouseleave="this.style.transform='scale(1)'">
     <i class="fa-solid fa-robot"></i>
 </button>
+@endif
 
 <style>
 .ai-chip {
@@ -3438,5 +4258,86 @@ async function aiSend() {
         btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i>';
     }
 }
+scTrackPatient({{ $encounter->patient->id }}, @json($encounter->patient->full_name), @json($encounter->patient->jhc_id), @json(route('patients.show', $encounter->patient)));
+window.scPatientVisitUrl = @json(route('appointments.create', ['patient_id' => $encounter->patient_id]));
+
+/* ===================== CLINICAL REMINDERS (CDS) ===================== */
+const CDS_URL      = @json(route('encounters.reminders', $encounter));
+const CDS_PATIENT  = { age: {{ (int) $encounter->patient->age_years }}, gender: @json($encounter->patient->gender) };
+const CDS_VITALS   = ['bp_systolic','bp_diastolic','pulse','temperature','spo2','respiratory_rate','weight','height','blood_glucose'];
+const CDS_TEXT     = ['chief_complaint','history_of_present_illness','past_medical_history','family_history','social_history','examination_findings','impression','plan'];
+const CDS_SEV      = { urgent: '#ef4444', warning: '#f59e0b', info: '#3b82f6' };
+let   cdsPopupShown = false;
+let   cdsTimer      = null;
+let   cdsLastSig    = '';
+
+function cdsCollect() {
+    const data = { age: CDS_PATIENT.age, gender: CDS_PATIENT.gender };
+    CDS_VITALS.forEach(function (n) {
+        const el = document.querySelector('#vitals-card [name="' + n + '"]');
+        if (el && el.value !== '') data[n] = el.value;
+    });
+    if (typeof clinicalQuills !== 'undefined' && clinicalQuills) {
+        CDS_TEXT.forEach(function (k) {
+            if (clinicalQuills[k]) data[k] = clinicalQuills[k].getText();
+        });
+    }
+    return data;
+}
+
+function cdsRow(s) {
+    const dot = CDS_SEV[s.severity] || '#3b82f6';
+    return '<div style="display:flex;gap:9px;align-items:flex-start;padding:8px 2px;border-bottom:1px solid var(--sc-border)">'
+        + '<span title="' + s.severity + '" style="margin-top:4px;width:8px;height:8px;border-radius:50%;flex:none;background:' + dot + '"></span>'
+        + '<i class="fa-solid ' + s.icon + '" style="color:' + s.color + ';margin-top:2px;flex:none;width:16px;text-align:center"></i>'
+        + '<div style="min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--sc-navy)">' + cdsEsc(s.name)
+        + ' <span style="font-weight:400;color:' + s.color + ';font-size:10.5px">· ' + cdsEsc(s.category_label) + '</span></div>'
+        + '<div style="font-size:12px;color:var(--sc-navy-soft,#475569);line-height:1.45">' + cdsEsc(s.suggestion) + '</div></div></div>';
+}
+
+function cdsEsc(t) { const d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; }
+
+function cdsRender(list) {
+    const panel = document.getElementById('cds-panel');
+    const n = list.length;
+    document.getElementById('cds-panel-count').textContent = n;
+    document.getElementById('cds-popup-count').textContent = n;
+    if (!n) { panel.style.display = 'none'; return; }
+    const html = list.map(cdsRow).join('');
+    document.getElementById('cds-panel-list').innerHTML = html;
+    document.getElementById('cds-popup-list').innerHTML = html;
+    panel.style.display = '';
+}
+
+function cdsOpenPopup() { document.getElementById('cds-popup').classList.add('open'); }
+function cdsClosePopup() { document.getElementById('cds-popup').classList.remove('open'); }
+
+function cdsEvaluate(showPopup) {
+    const data = cdsCollect();
+    const sig = JSON.stringify(data);
+    if (sig === cdsLastSig && !showPopup) return;   // nothing changed
+    cdsLastSig = sig;
+    $.post(CDS_URL, data, function (res) {
+        if (!res || !res.success) return;
+        cdsRender(res.suggestions || []);
+        if (res.count > 0 && showPopup && !cdsPopupShown) { cdsOpenPopup(); cdsPopupShown = true; }
+    });
+}
+
+function cdsEvaluateSoon() { clearTimeout(cdsTimer); cdsTimer = setTimeout(function () { cdsEvaluate(false); }, 800); }
+
+document.addEventListener('DOMContentLoaded', function () {
+    // Re-evaluate as the doctor edits vitals…
+    document.querySelectorAll('#vitals-card [name]').forEach(function (el) {
+        el.addEventListener('change', cdsEvaluateSoon);
+        el.addEventListener('input',  cdsEvaluateSoon);
+    });
+    // …and as they type clinical notes (Quill editors are ready by now).
+    if (typeof clinicalQuills !== 'undefined' && clinicalQuills) {
+        Object.values(clinicalQuills).forEach(function (q) { q.on('text-change', cdsEvaluateSoon); });
+    }
+    // Initial pass from the saved encounter → auto-popup if anything is due.
+    setTimeout(function () { cdsEvaluate(true); }, 400);
+});
 </script>
 @endpush

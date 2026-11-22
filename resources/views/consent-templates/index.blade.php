@@ -5,7 +5,9 @@
 
 <div class="page-header">
     <div class="page-header-left"><h1>Consent Templates</h1></div>
-    <a href="{{ route('consent-templates.create') }}" class="btn btn-primary"><i class="fa-solid fa-plus"></i> New Template</a>
+    @include('templates._toolbar', ['inline'=>true, 'extra' => [
+        ['url'=>route('consent-templates.create'), 'icon'=>'fa-plus', 'label'=>'New Template', 'bg'=>'#047857'],
+    ]])
 </div>
 
 @if(session('success'))<div class="alert alert-success"><i class="fa-solid fa-circle-check"></i> {{ session('success') }}</div>@endif

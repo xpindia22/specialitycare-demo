@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
  * Payees: named people the clinic pays a recurring amount to.
  *
  * Each payee gets an auto-created expense ledger so the P&L shows per-person
- * lines (e.g., "Salary - Sample Physician ₹2,16,000") instead of one rolled-up
+ * lines (e.g., "Salary - Anushika ₹2,16,000") instead of one rolled-up
  * "Staff Salaries" line. The auto-creation happens in the Payee model's
  * `creating` hook — see App\Models\Payee.
  *

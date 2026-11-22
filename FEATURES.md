@@ -1,5 +1,5 @@
 # SpecialityCare — Hospital Management System
-**Demo Clinic Pvt. Ltd. | Laravel 11 | Built May 2025**
+**James Heart Care Pvt. Ltd. | Laravel 11 | Built May 2025**
 
 ---
 

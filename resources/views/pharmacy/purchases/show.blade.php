@@ -3,6 +3,8 @@
 @section('page-title','Stock Receipt #'.$purchase->id)
 @section('content')
 
+@include('pharmacy._toolbar')
+
 <div class="page-header">
     <div class="page-header-left">
         <a href="{{ route('pharmacy.purchases.index') }}" class="text-small"><i class="fa-solid fa-arrow-left"></i> Purchases</a>

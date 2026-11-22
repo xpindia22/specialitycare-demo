@@ -32,7 +32,7 @@ body { font-family:'DM Sans',sans-serif; font-size:13px; color:#1a2942; backgrou
 @if(setting('print_header_enabled','1') !== '0')
 <div class="header">
     <div>
-        <div class="clinic">{{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}</div>
+        <div class="clinic">{{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}</div>
         <div style="font-size:11px;color:#64748b;margin-top:2px">{{ setting('clinic_address', '') }}</div>
     </div>
     <div style="text-align:right">

@@ -5,16 +5,15 @@ namespace App\Observers;
 use App\Models\Bill;
 use App\Services\AdminNotifier;
 use App\Services\NotificationPreferenceService;
-use App\Services\PatientNotifier;
 
 class BillObserver
 {
     public function created(Bill $b): void
     {
-        // Patient + owner channels (email + WhatsApp). PatientNotifier itself
-        // checks each channel against notification_preferences[bill_created],
-        // so we always call it and let it sort out who to notify.
-        app(PatientNotifier::class)->sendBillCreated($b);
+        // Patient-facing send REMOVED 2026-08-26: no more auto WhatsApp/email
+        // to the patient on bill creation -- only the manual Send/Email/
+        // WhatsApp button clicks on the bill page (WhatsAppDocumentController
+        // / EmailDocumentController) send anything to a patient now.
 
         // Admin email digest (separate from the patient flow above so the
         // owner can keep this short-form internal alert independent of the
@@ -48,12 +47,9 @@ class BillObserver
         $meaningful = ['status', 'paid_amount', 'due_amount', 'total_amount', 'discount_amount', 'insurance_amount'];
         if (!$changes->intersect($meaningful)->count()) return;
 
-        // Bill just transitioned to Paid — fire the patient receipt event
-        // (separate gating from bill_updated, so the owner can turn on Paid
-        // receipts to patients without turning on every bill-edit email).
-        if ($b->status === 'Paid' && $b->getOriginal('status') !== 'Paid') {
-            app(PatientNotifier::class)->sendBillPaidReceipt($b);
-        }
+        // Patient receipt-on-Paid REMOVED 2026-08-26: no more auto WhatsApp/
+        // email to the patient when a bill transitions to Paid -- staff must
+        // click Send/Email/WhatsApp on the bill page to send a receipt.
 
         if (!app(NotificationPreferenceService::class)->shouldSend('bill_updated', 'admin', 'email')) return;
 

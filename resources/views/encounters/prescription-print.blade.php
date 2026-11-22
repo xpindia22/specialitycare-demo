@@ -56,7 +56,7 @@
 @if(setting('print_header_enabled','1') !== '0')
 <div class="rx-header">
     <div>
-        <div class="rx-clinic-name">{{ setting('clinic_name', 'Demo Clinic Pvt. Ltd.') }}</div>
+        <div class="rx-clinic-name">{{ setting('clinic_name', 'James Heart Care Pvt. Ltd.') }}</div>
         @php
             $addr = setting('clinic_address', '');
             $addrParts = array_filter(array_map('trim', explode(',', $addr)));

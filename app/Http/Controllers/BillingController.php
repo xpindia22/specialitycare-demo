@@ -15,6 +15,7 @@ use App\Models\EcgRecord;
 use App\Models\EchoRecord;
 use App\Models\ReferralPayment;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class BillingController extends Controller
@@ -63,17 +64,16 @@ class BillingController extends Controller
         // Pre-build bill items from encounter
         $encounterItems = [];
         if ($encounter) {
-            // Consultation fee — match visit_type to service
-            $visitType = $encounter->visit_type ?? 'New Visit';
-            $svcName   = str_contains(strtolower($visitType), 'follow') ? 'Follow-up Consultation' : 'General Consultation';
-            $consultSvc= ServiceCharge::where('name', $svcName)->first()
-                      ?? ServiceCharge::where('category','Consultation')->first();
-            if ($consultSvc) {
-                $encounterItems[] = ['name' => $consultSvc->name, 'type' => 'Consultation', 'price' => $consultSvc->price, 'qty' => 1];
-            }
+            // Consultation fee from the OPD fee rules (free / follow-up window, discounts)
+            $encounter->loadMissing(['patient', 'doctor']);
+            $feeQuote = \App\Services\OpdFee::quote($encounter->patient, $encounter->doctor, \App\Services\OpdFee::departmentOf($encounter), $encounter->encounter_date, $encounter);
+            $encounterItems[] = \App\Services\OpdFee::billItem($feeQuote, $encounter->doctor);
 
-            // Lab orders
+            // Lab orders — skip any already settled by their own bill (e.g. uploaded
+            // reports, auto-recorded as paid at sample collection). Billing them again
+            // here would be a double charge.
             foreach ($encounter->labOrders as $lo) {
+                if ($lo->bill_id) continue;
                 foreach ($lo->items as $item) {
                     $name  = $item->test?->name ?? $item->panel?->name ?? 'Lab Test';
                     $price = $item->price ?? 0;
@@ -86,7 +86,7 @@ class BillingController extends Controller
             ->orderBy('first_name')->orderBy('last_name')
             ->get(['id','first_name','last_name','jhc_id','phone','gender']);
 
-        return view('billing.create', compact('patient', 'encounter', 'services', 'encounterItems', 'patients'));
+        return view('billing.create', compact('patient', 'encounter', 'services', 'encounterItems', 'patients') + ['feeQuote' => $feeQuote ?? null]);
     }
 
     public function store(Request $request)
@@ -104,6 +104,8 @@ class BillingController extends Controller
             'discount_percent'   => 'nullable|numeric|min:0|max:100',
             'payment_method'     => 'nullable|string',
             'paid_amount'        => 'nullable|numeric|min:0',
+            'bill_date'          => 'nullable|date|before_or_equal:today',
+            'payment_date'       => 'nullable|date|before_or_equal:today',
             'notes'              => 'nullable|string',
             'insurance_amount'   => 'nullable|numeric|min:0',
             'insurance_company'  => 'nullable|string|max:200',
@@ -133,7 +135,7 @@ class BillingController extends Controller
             'patient_id'         => $request->patient_id,
             'encounter_id'       => $request->encounter_id,
             'billing_package_id' => $request->billing_package_id,
-            'bill_date'          => today(),
+            'bill_date'          => $request->bill_date ?: today(),
             'subtotal'          => $subtotal,
             'discount_percent'  => $discountPct,
             'discount_amount'   => $discountAmount,
@@ -169,7 +171,7 @@ class BillingController extends Controller
                 'bill_id'        => $bill->id,
                 'amount'         => $paidAmount,
                 'payment_method' => $request->payment_method ?? 'Cash',
-                'payment_date'   => today(),
+                'payment_date'   => $request->payment_date ?: today(),
                 'received_by'    => auth()->id(),
             ]);
         }
@@ -191,6 +193,7 @@ class BillingController extends Controller
             'amount'         => 'required|numeric|min:0.01|max:' . $bill->due_amount,
             'payment_method' => 'required|string',
             'transaction_ref'=> 'nullable|string',
+            'payment_date'   => 'nullable|date|before_or_equal:today',
         ]);
 
         Payment::create([
@@ -198,7 +201,7 @@ class BillingController extends Controller
             'amount'          => $request->amount,
             'payment_method'  => $request->payment_method,
             'transaction_ref' => $request->transaction_ref,
-            'payment_date'    => today(),
+            'payment_date'    => $request->payment_date ?: today(),
             'notes'           => $request->notes,
             'received_by'     => auth()->id(),
         ]);
@@ -219,11 +222,108 @@ class BillingController extends Controller
         return back()->with('success', 'Payment recorded successfully.');
     }
 
+    /** Correct the bill date of an existing bill (staff often enter bills a day late). */
+    public function updateBillDate(Request $request, Bill $bill)
+    {
+        $data = $request->validate(['bill_date' => 'required|date|before_or_equal:today']);
+        $old  = $bill->bill_date->toDateString();
+        if ($old === $data['bill_date']) return back();
+
+        $bill->update(['bill_date' => $data['bill_date']]);
+        $this->moveVoucherDate(Bill::class, $bill->id, $data['bill_date'], true);
+        ActivityLog::log('updated', "Changed bill date of {$bill->bill_no} from {$old} to {$data['bill_date']}");
+        return back()->with('success', 'Bill date updated.');
+    }
+
+    /** Correct the date of a payment already recorded against a bill. */
+    public function updatePaymentDate(Request $request, Bill $bill, Payment $payment)
+    {
+        abort_unless($payment->bill_id === $bill->id, 404);
+        $data = $request->validate(['payment_date' => 'required|date|before_or_equal:today']);
+        $old  = $payment->payment_date?->toDateString();
+        if ($old === $data['payment_date']) return back();
+
+        $payment->update(['payment_date' => $data['payment_date']]);
+        $this->moveVoucherDate(Payment::class, $payment->id, $data['payment_date']);
+        ActivityLog::log('updated', "Changed date of ₹{$payment->amount} payment on bill {$bill->bill_no} from {$old} to {$data['payment_date']}");
+        return back()->with('success', 'Payment date updated.');
+    }
+
+    /** Remove a payment entered by mistake (e.g. recorded twice). Owner only. */
+    public function destroyPayment(Bill $bill, Payment $payment)
+    {
+        abort_unless(auth()->user()?->isOwner(), 403, 'Only the clinic owner can delete payments.');
+        abort_unless($payment->bill_id === $bill->id, 404);
+
+        DB::transaction(function () use ($bill, $payment) {
+            $this->cancelVoucher(Payment::class, $payment->id, "payment deleted from bill {$bill->bill_no}");
+            $payment->delete();
+
+            $paid = (float) $bill->payments()->sum('amount');
+            $bill->update([
+                'paid_amount' => $paid,
+                'due_amount'  => max(0, $bill->total_amount - $paid),
+                'status'      => $paid <= 0 ? 'Unpaid' : ($paid >= $bill->total_amount ? 'Paid' : 'Partial'),
+            ]);
+        });
+
+        ActivityLog::log('deleted', "Deleted ₹{$payment->amount} {$payment->payment_method} payment dated {$payment->payment_date?->toDateString()} from bill {$bill->bill_no}");
+        return back()->with('success', 'Payment deleted.');
+    }
+
+    /** Delete a whole bill entered by mistake (e.g. duplicate). Owner only. */
+    public function destroy(Bill $bill)
+    {
+        abort_unless(auth()->user()?->isOwner(), 403, 'Only the clinic owner can delete bills.');
+        $bill->load('patient', 'payments');
+
+        DB::transaction(function () use ($bill) {
+            $this->cancelVoucher(Bill::class, $bill->id, "bill {$bill->bill_no} deleted");
+            foreach ($bill->payments as $p) {
+                $this->cancelVoucher(Payment::class, $p->id, "bill {$bill->bill_no} deleted");
+            }
+            // Unpaid referral commission for this bill no longer applies; paid ones are kept
+            ReferralPayment::where('bill_id', $bill->id)->where('paid_amount', '<=', 0)->delete();
+            $bill->payments()->delete();
+            $bill->delete(); // bill_items cascade
+        });
+
+        ActivityLog::log('deleted', "Deleted bill {$bill->bill_no} for " . ($bill->patient?->full_name ?? "patient #{$bill->patient_id}")
+            . " — total ₹{$bill->total_amount}, paid ₹{$bill->paid_amount}, dated {$bill->bill_date->toDateString()}");
+        return redirect()->route('billing.index')->with('success', "Bill {$bill->bill_no} deleted.");
+    }
+
+    /** Cancel (not delete) the auto-posted accounting voucher, keeping the audit trail. */
+    private function cancelVoucher(string $sourceType, int $sourceId, string $reason): void
+    {
+        $voucher = \App\Models\Voucher::where('source_type', $sourceType)->where('source_id', $sourceId)
+            ->where('status', '!=', 'Cancelled')->first();
+        if ($voucher) app(\App\Services\VoucherService::class)->cancel($voucher, $reason);
+    }
+
+    /**
+     * Keep the auto-posted accounting voucher on the same date as its bill/payment.
+     * Left alone if the new date falls in a different financial year, since the
+     * voucher number belongs to its FY series.
+     */
+    private function moveVoucherDate(string $sourceType, int $sourceId, string $date, bool $withReference = false): void
+    {
+        $voucher = \App\Models\Voucher::where('source_type', $sourceType)->where('source_id', $sourceId)->first();
+        if (!$voucher) return;
+        $fy = app(\App\Services\VoucherService::class)->fyYear(\Illuminate\Support\Carbon::parse($date));
+        if ((int) $voucher->fy_year !== $fy) return;
+        $voucher->update(array_filter([
+            'voucher_date'   => $date,
+            'reference_date' => $withReference ? $date : null,
+        ]));
+    }
+
     public function updateStatus(Request $request, Bill $bill)
     {
         $data = $request->validate([
             'status' => 'required|in:Unpaid,Partial,Paid,Refunded',
             'payment_method' => 'nullable|string',
+            'payment_date'   => 'nullable|date|before_or_equal:today',
         ]);
 
         $updates = ['status' => $data['status']];
@@ -233,7 +333,7 @@ class BillingController extends Controller
                     'bill_id'        => $bill->id,
                     'amount'         => $bill->due_amount,
                     'payment_method' => $data['payment_method'] ?? 'Cash',
-                    'payment_date'   => today(),
+                    'payment_date'   => $data['payment_date'] ?? today(),
                     'notes'          => 'Marked paid from bill status update.',
                     'received_by'    => auth()->id(),
                 ]);
@@ -272,7 +372,7 @@ class BillingController extends Controller
         if (ReferralPayment::where('bill_id', $bill->id)->exists()) return;
 
         $calculated = 0;
-        if ($rs->rate_type === 'percent') {
+        if ($rs->rate_type === 'percentage') {
             $calculated = round($bill->total_amount * $rs->rate_value / 100, 2);
         } elseif ($rs->rate_type === 'fixed') {
             $calculated = (float) $rs->rate_value;

@@ -6,17 +6,14 @@
 
 <div class="page-header">
     <div class="page-header-left"><h1>Doctor's Queue</h1></div>
-    <div class="d-flex gap-2 align-items-center">
-        <form method="GET" action="{{ route('opd.doctor') }}" class="d-flex gap-2 align-items-center">
-            <select name="doctor_id" class="form-control" onchange="this.form.submit()" style="min-width:180px">
-                @foreach($doctors as $d)
-                    <option value="{{ $d->id }}" {{ $doctorId == $d->id ? 'selected':'' }}>Dr. {{ $d->first_name }} {{ $d->last_name }}</option>
-                @endforeach
-            </select>
-        </form>
-        <a href="{{ route('opd.index') }}" class="btn btn-outline"><i class="fa-solid fa-ticket me-1"></i>Reception</a>
-        <a href="{{ route('opd.board') }}" class="btn btn-outline" target="_blank"><i class="fa-solid fa-display me-1"></i>Board</a>
-    </div>
+    <form method="GET" action="{{ route('opd.doctor') }}" class="d-flex gap-2 align-items-center">
+        <select name="doctor_id" class="form-control" onchange="this.form.submit()" style="min-width:180px">
+            @foreach($doctors as $d)
+                <option value="{{ $d->id }}" {{ $doctorId == $d->id ? 'selected':'' }}>Dr. {{ $d->first_name }} {{ $d->last_name }}</option>
+            @endforeach
+        </select>
+    </form>
+    @include('opd._toolbar', ['inline'=>true])
 </div>
 
 @if(session('success'))
@@ -35,7 +32,7 @@
                     <div style="font-weight:700;font-size:16px">{{ $current->patient->first_name }} {{ $current->patient->last_name }}
                         @if($current->priority==='urgent')<span class="badge badge-red ms-2">Urgent</span>@endif
                     </div>
-                    <div style="font-size:12px;color:#666">{{ $current->patient->jhc_id }} &nbsp;·&nbsp; {{ $current->purpose ?: 'No purpose listed' }}</div>
+                    <div style="font-size:12px;color:#666">{{ $current->patient->jhc_id }} &nbsp;·&nbsp; @if($current->department)<span style="color:{{ $current->department->color ?: 'inherit' }}"><i class="fa-solid {{ $current->department->icon ?: 'fa-hospital' }}"></i> {{ $current->department->name }}</span> &nbsp;·&nbsp; @endif{{ $current->purpose ?: 'No purpose listed' }}</div>
                     @if($current->patient->allergies)
                     <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;color:#991b1b;margin-top:4px">
                         <i class="fa-solid fa-triangle-exclamation"></i> ALLERGIES: {{ $current->patient->allergies }}
@@ -101,7 +98,7 @@
                             </div>
                             @endif
                         </td>
-                        <td style="font-size:12px">{{ $t->purpose ?: '—' }}</td>
+                        <td style="font-size:12px">@if($t->department)<div style="font-weight:600;color:{{ $t->department->color ?: 'inherit' }}"><i class="fa-solid {{ $t->department->icon ?: 'fa-hospital' }}"></i> {{ $t->department->name }}</div>@endif{{ $t->purpose ?: '—' }}</td>
                         <td>
                             @if($t->priority==='urgent')
                                 <span class="badge badge-red">Urgent</span>

@@ -266,7 +266,7 @@
     <div class="wa-list" id="chat-list">
         @php
             $lastDay = null;
-            // Names to highlight as @mentions (longest first so "@Sample Admin"
+            // Names to highlight as @mentions (longest first so "@Robert James"
             // wins over "@Robert"). Used to render mentions safely below.
             $mentionNames = $thread->activeParticipants->pluck('name')->filter()
                 ->sortByDesc(fn ($n) => mb_strlen($n))->values();
@@ -313,12 +313,7 @@
                                     </a>
                                 @endif
                             @endforeach
-                            @if(trim($m->body) !== '')@php
-                                $bodyHtml = e($m->body);
-                                foreach ($mentionNames as $nm) {
-                                    $bodyHtml = preg_replace('/@' . preg_quote(e($nm), '/') . '\b/u', '<span class="wa-mention">@' . e($nm) . '</span>', $bodyHtml);
-                                }
-                            @endphp<span class="wa-text">{!! $bodyHtml !!}</span>@endif<span class="wa-meta">{!! in_array($m->id, $starredIds ?? []) ? '<i class="fa-solid fa-star wa-star-mark" title="Starred"></i>' : '' !!}{!! $m->edited_at ? '<span class="wa-edited" title="Edited">edited</span> ' : '' !!}{{ $m->created_at->format('H:i') }}@if($mine)@php $seen = $allSeenUpTo && $m->created_at->lte($allSeenUpTo); @endphp@if($seen)<i class="fa-solid fa-check-double tick seen" title="Seen"></i>@else<i class="fa-solid fa-check tick sent" title="Sent"></i>@endif @endif</span>
+                            @if(trim($m->body) !== '')<span class="wa-text">{!! \App\Support\MessageFormatter::toHtml($m->body, $mentionNames) !!}</span>@endif<span class="wa-meta">{!! in_array($m->id, $starredIds ?? []) ? '<i class="fa-solid fa-star wa-star-mark" title="Starred"></i>' : '' !!}{!! $m->edited_at ? '<span class="wa-edited" title="Edited">edited</span> ' : '' !!}{{ $m->created_at->format('H:i') }}@if($mine)@php $seen = $allSeenUpTo && $m->created_at->lte($allSeenUpTo); @endphp@if($seen)<i class="fa-solid fa-check-double tick seen" title="Seen"></i>@else<i class="fa-solid fa-check tick sent" title="Sent"></i>@endif @endif</span>
                         @endif
                         @if(((($canModerate ?? false) || $mine)) && !$m->isDeleted())
                             <form class="wa-edit" id="edit-{{ $m->id }}" hidden method="POST" action="{{ route('messages.edit', [$thread, $m]) }}">

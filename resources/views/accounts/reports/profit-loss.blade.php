@@ -3,6 +3,8 @@
 @section('page-title','Profit & Loss')
 @section('content')
 
+@include('accounts._toolbar')
+
 <div class="page-header">
     <div class="page-header-left">
         <a href="{{ route('accounts.index') }}" class="text-small"><i class="fa-solid fa-arrow-left"></i> Accounts</a>
@@ -17,6 +19,13 @@
     <div><label>To</label><input type="date" name="to" value="{{ $to->toDateString() }}" class="form-control"></div>
     <button class="btn btn-primary">Show</button>
 </form>
+
+@if(!empty($boD))
+    <div class="alert alert-info text-small" style="margin-bottom:12px">
+        <i class="fa-solid fa-circle-info"></i> Books opening date <strong>{{ $boD->format('d-M-Y') }}</strong> is active —
+        this statement starts no earlier than the cutover; pre-cutover profit is folded into opening reserves.
+    </div>
+@endif
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
     <div class="card">

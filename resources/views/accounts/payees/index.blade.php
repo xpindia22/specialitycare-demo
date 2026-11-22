@@ -3,15 +3,14 @@
 @section('page-title','Staff & Payees')
 @section('content')
 
+@include('accounts._toolbar', ['extra' => [
+    ['url' => route('accounts.payees.create'), 'icon' => 'fa-user-plus', 'label' => 'Add Payee', 'bg' => '#0d9488'],
+]])
+
 <div class="page-header">
     <div class="page-header-left">
-        <a href="{{ route('accounts.index') }}" class="text-small"><i class="fa-solid fa-arrow-left"></i> Accounts</a>
         <h1><i class="fa-solid fa-people-group"></i> Staff &amp; Payees</h1>
         <div class="text-small text-muted">Define each person you pay regularly. Each gets their own expense ledger so the P&amp;L shows per-person totals.</div>
-    </div>
-    <div style="display:flex;gap:8px">
-        <a href="{{ route('accounts.expenses.salary') }}" class="btn btn-primary"><i class="fa-solid fa-money-bill-wave"></i> Pay Salary</a>
-        <a href="{{ route('accounts.payees.create') }}" class="btn btn-outline"><i class="fa-solid fa-user-plus"></i> Add Payee</a>
     </div>
 </div>
 
@@ -22,7 +21,7 @@
     <x-empty-state
         icon="fa-people-group"
         title="No payees yet"
-        message="Add Sample Physician, your maid, cleaner, driver — anyone you pay a monthly amount to. Each gets a per-person ledger so the P&L breaks down who's costing what."
+        message="Add Anushika, your maid, cleaner, driver — anyone you pay a monthly amount to. Each gets a per-person ledger so the P&L breaks down who's costing what."
         action="Add your first payee"
         :actionUrl="route('accounts.payees.create')" />
 </div></div>

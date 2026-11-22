@@ -44,6 +44,7 @@ class SendRefillReminderWhatsApp extends Command
         $limit  = $this->option('limit') !== null ? (int) $this->option('limit') : null;
         $dryRun = (bool) $this->option('dry-run');
         $clinic = setting('clinic_name', config('app.name', 'Speciality Care'));
+        $clinicSig = clinic_signature();
         $today  = Carbon::today();
         $windowEnd = $today->copy()->addDays($windowDays);
 
@@ -107,7 +108,7 @@ class SendRefillReminderWhatsApp extends Command
                   . "Your prescription is running low. Please come for a refill so you don't miss any doses.\n\n"
                   . "Medicines due soon:\n"
                   . collect($dueItems)->map(fn ($d) => '• ' . $d['name'] . ' — ' . $d['due_at']->format('d M Y'))->implode("\n")
-                  . "\n\nRegards, {$clinic} team.\n[ref:{$key}]";
+                  . "\n\nRegards, {$clinicSig}.\n[ref:{$key}]";
 
             if ($dryRun) {
                 $sent++;
@@ -116,7 +117,7 @@ class SendRefillReminderWhatsApp extends Command
             }
 
             // Template refill_reminder: {{1}} name, {{2}} med list, {{3}} clinic.
-            $r = $wa->sendTemplateToPatient($p, 'refill_reminder', [$name, $listForTemplate, $clinic], $body, 'refill_reminder');
+            $r = $wa->sendTemplateToPatient($p, 'refill_reminder', [$name, $listForTemplate, $clinicSig], $body, 'refill_reminder');
             if ($r['ok'] ?? false) { $sent++; }
             else { $skipped++; }
         }

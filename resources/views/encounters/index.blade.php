@@ -9,6 +9,12 @@
         <h1>OPD Encounters</h1>
         <div class="breadcrumb">Outpatient — Clinical Encounter History</div>
     </div>
+    @include('opd._toolbar', ['inline'=>true])
+    @if(auth()->user()?->isOwner())
+    <a href="{{ route('encounters.deleted') }}" class="btn btn-sm btn-outline" style="color:var(--sc-red);border-color:var(--sc-red);white-space:nowrap">
+        <i class="fa-solid fa-trash"></i> Deleted Visits ({{ \App\Models\Encounter::onlyTrashed()->count() }})
+    </a>
+    @endif
 </div>
 
 {{-- Filter bar --}}
@@ -74,7 +80,7 @@
                 $statusColors = ['In Progress' => 'amber', 'Completed' => 'green', 'Cancelled' => 'red'];
                 $sc = $statusColors[$enc->status] ?? 'gray';
             @endphp
-            <tr>
+            <tr style="cursor:pointer" onclick="location='{{ route('encounters.show', $enc) }}'">
                 <td class="mono fw-600">{{ $enc->encounter_no }}</td>
                 <td>
                     <div class="fw-600">{{ $enc->patient->full_name }}</div>

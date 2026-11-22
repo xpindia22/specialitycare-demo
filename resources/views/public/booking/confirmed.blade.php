@@ -31,6 +31,7 @@
         <div class="confirm-details" style="margin-top:18px">
             <div class="row"><span class="label">Patient</span><span class="val">{{ $appointment->public_name }}</span></div>
             <div class="row"><span class="label">Doctor</span><span class="val">Dr. {{ $appointment->doctor->first_name }} {{ $appointment->doctor->last_name }}</span></div>
+            @if($appointment->department)<div class="row"><span class="label">Speciality</span><span class="val">{{ $appointment->department->name }}@if($appointment->department->room) &middot; {{ $appointment->department->room }}@endif</span></div>@endif
             <div class="row"><span class="label">Date</span><span class="val">{{ \Illuminate\Support\Carbon::parse($appointment->appointment_date)->format('D, d M Y') }}</span></div>
             @if($appointment->appointment_time)
             <div class="row"><span class="label">Preferred time</span><span class="val">{{ \Illuminate\Support\Carbon::parse($appointment->appointment_time)->format('h:i A') }}</span></div>

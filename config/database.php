@@ -59,6 +59,10 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
+            // Read/write TIMESTAMP columns as UTC on every server, matching paris30 (whose
+            // MySQL runs on UTC). Without this, copies on IST machines (backup20, home)
+            // show every time 5h30m ahead. The app itself still displays Asia/Kolkata.
+            'timezone' => '+00:00',
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
@@ -79,6 +83,10 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
+            // Read/write TIMESTAMP columns as UTC on every server, matching paris30 (whose
+            // MySQL runs on UTC). Without this, copies on IST machines (backup20, home)
+            // show every time 5h30m ahead. The app itself still displays Asia/Kolkata.
+            'timezone' => '+00:00',
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],

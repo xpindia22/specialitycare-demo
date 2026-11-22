@@ -166,7 +166,9 @@ class ReferralController extends Controller
     public function recordPayment(Request $request)
     {
         $data = $request->validate([
-            'referral_payment_id' => 'required|exists:referral_payments,id',
+            'referral_payment_id' => 'nullable|exists:referral_payments,id',
+            'referral_source_id'  => 'required_without:referral_payment_id|nullable|exists:referral_sources,id',
+            'patient_id'          => 'required_without:referral_payment_id|nullable|exists:patients,id',
             'paid_amount'         => 'required|numeric|min:0.01',
             'payment_method'      => 'required|in:cash,bank_transfer,cheque,upi',
             'transaction_ref'     => 'nullable|string|max:200',
@@ -174,18 +176,36 @@ class ReferralController extends Controller
             'notes'               => 'nullable|string',
         ]);
 
-        $rp = ReferralPayment::findOrFail($data['referral_payment_id']);
-        $newPaid = $rp->paid_amount + $data['paid_amount'];
-        $status = $newPaid >= $rp->calculated_amount ? 'paid' : 'partial';
+        if (!empty($data['referral_payment_id'])) {
+            // Paying down an existing (usually auto-created, bill-linked) pending/partial entry.
+            $rp = ReferralPayment::findOrFail($data['referral_payment_id']);
+            $newPaid = $rp->paid_amount + $data['paid_amount'];
+            $status = $newPaid >= $rp->calculated_amount ? 'paid' : 'partial';
 
-        $rp->update([
-            'paid_amount'     => $newPaid,
-            'payment_method'  => $data['payment_method'],
-            'transaction_ref' => $data['transaction_ref'] ?? $rp->transaction_ref,
-            'payment_date'    => $data['payment_date'],
-            'notes'           => $data['notes'] ?? $rp->notes,
-            'status'          => $status,
-        ]);
+            $rp->update([
+                'paid_amount'     => $newPaid,
+                'payment_method'  => $data['payment_method'],
+                'transaction_ref' => $data['transaction_ref'] ?? $rp->transaction_ref,
+                'payment_date'    => $data['payment_date'],
+                'notes'           => $data['notes'] ?? $rp->notes,
+                'status'          => $status,
+            ]);
+        } else {
+            // No pending entry exists for this source yet (e.g. bill wasn't auto-linked, or the
+            // incentive is being settled outside the billing flow) — record it in retrospect.
+            $rp = ReferralPayment::create([
+                'referral_source_id' => $data['referral_source_id'],
+                'patient_id'         => $data['patient_id'],
+                'calculated_amount'  => $data['paid_amount'],
+                'paid_amount'        => $data['paid_amount'],
+                'status'             => 'paid',
+                'payment_method'     => $data['payment_method'],
+                'transaction_ref'    => $data['transaction_ref'] ?? null,
+                'payment_date'       => $data['payment_date'],
+                'notes'              => $data['notes'] ?? 'Recorded in retrospect (not linked to a specific bill).',
+                'created_by'         => auth()->id(),
+            ]);
+        }
 
         $sourceName = $rp->referralSource->name ?? ('ID ' . $rp->referral_source_id);
         ActivityLog::log('Referral Payment Recorded', "Recorded ₹{$data['paid_amount']} payment via {$data['payment_method']} for referral source: {$sourceName}");

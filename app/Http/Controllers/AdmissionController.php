@@ -17,11 +17,21 @@ class AdmissionController extends Controller
 {
     public function index(Request $request)
     {
-        $status = $request->get('status', 'admitted');
         $q = $request->get('q');
+
+        // Optional admission-date range (from/to). When a range is active we
+        // default to ALL statuses so the period shows discharged patients too;
+        // with no range we keep the useful "currently admitted" default.
+        $from = $request->get('from') ?: null;
+        $to   = $request->get('to')   ?: null;
+        if ($from && $to && $to < $from) { [$from, $to] = [$to, $from]; }
+        $hasRange = $from && $to;
+        $status = $request->get('status') ?? ($hasRange ? 'all' : 'admitted');
 
         $admissions = Admission::with(['patient', 'ward', 'bed', 'admittingDoctor'])
             ->when($status !== 'all', fn($query) => $query->where('status', $status))
+            ->when($hasRange, fn($query) => $query->whereDate('admission_date', '>=', $from)
+                                                  ->whereDate('admission_date', '<=', $to))
             ->when($q, function ($query) use ($q) {
                 $query->where('ipd_no', 'like', "%$q%")
                     ->orWhereHas('patient', fn($p) => $p->where('first_name', 'like', "%$q%")
@@ -48,7 +58,7 @@ class AdmissionController extends Controller
             'available'   => Bed::where('is_active', true)->where('status', 'available')->count(),
         ];
 
-        return view('admissions.index', compact('admissions', 'stats', 'status', 'q'));
+        return view('admissions.index', compact('admissions', 'stats', 'status', 'q', 'from', 'to'));
     }
 
     public function create(Request $request)
@@ -336,21 +346,62 @@ class AdmissionController extends Controller
             'discharge_condition' => 'required|in:improved,recovered,lama,expired,transferred',
             'discharge_notes'     => 'nullable|string',
             'discharge_summary'   => 'nullable|string',
+            'discharge_override'  => 'nullable|string|max:300',
         ]);
+
+        // Every checklist item must be cleared; an admin may override with a reason (e.g. LAMA, expired).
+        $outstanding = \App\Services\DischargeChecklist::outstanding($admission);
+        if ($outstanding) {
+            $labels = collect($outstanding)->map(fn ($k) => \App\Services\DischargeChecklist::ITEMS[$k]['label'])->implode('; ');
+            if (!auth()->user()->isAdmin() || blank($data['discharge_override'] ?? null)) {
+                return back()->withInput()->withErrors(['checklist' => 'Discharge checklist is not complete: ' . $labels
+                    . (auth()->user()->isAdmin() ? '. To discharge anyway, type a reason in the red Override box (bottom right) and press "Discharge with override".' : '.')]);
+            }
+            $data['discharge_override'] = 'Not cleared: ' . implode(', ', $outstanding) . '. Reason: ' . $data['discharge_override'];
+        } else {
+            $data['discharge_override'] = null;
+        }
 
         DB::transaction(function () use ($data, $admission) {
             $data['status'] = 'discharged';
             $admission->update($data);
 
-            $admission->bed->update(['status' => 'available']);
+            // housekeeping cleans the bed before the next patient
+            $admission->bed->update(['status' => 'cleaning']);
 
             ActivityLog::log(
                 'Patient Discharged',
-                "IPD {$admission->ipd_no}: patient discharged ({$admission->discharge_condition}), bed {$admission->bed->bed_number} freed"
+                "IPD {$admission->ipd_no}: patient discharged ({$admission->discharge_condition}), bed {$admission->bed->bed_number} sent for cleaning" . ($admission->discharge_override ? " — checklist override: {$admission->discharge_override}" : '')
             );
         });
 
         return redirect()->route('admissions.show', $admission)->with('success', 'Patient discharged successfully.');
+    }
+
+    /** Tick a discharge checklist item. */
+    public function clearItem(Request $request, Admission $admission, string $item)
+    {
+        $items = \App\Services\DischargeChecklist::for($admission);
+        abort_unless(isset($items[$item]), 404);
+        abort_unless($items[$item]['can'], 403, 'Your role cannot sign off this item.');
+        abort_if($admission->status !== 'admitted', 422, 'Patient is not admitted.');
+        $data = $request->validate(['note' => 'nullable|string|max:300']);
+
+        \App\Models\DischargeClearance::updateOrCreate(
+            ['admission_id' => $admission->id, 'item' => $item],
+            ['note' => $data['note'] ?? null, 'cleared_by' => auth()->id(), 'cleared_at' => now()]
+        );
+        ActivityLog::log('Discharge Checklist', "IPD {$admission->ipd_no}: cleared \"{$items[$item]['label']}\"");
+        return back()->with('success', 'Signed off: ' . $items[$item]['label'] . '.');
+    }
+
+    public function unclearItem(Admission $admission, string $item)
+    {
+        $c = \App\Models\DischargeClearance::where('admission_id', $admission->id)->where('item', $item)->firstOrFail();
+        abort_unless($c->cleared_by === auth()->id() || auth()->user()->isAdmin(), 403);
+        abort_if($admission->status !== 'admitted', 422, 'Patient is not admitted.');
+        $c->delete();
+        return back()->with('success', 'Sign-off removed.');
     }
 
     public function transfer(Request $request, Admission $admission)
@@ -366,6 +417,12 @@ class AdmissionController extends Controller
         ]);
 
         $newBed = Bed::findOrFail($data['new_bed_id']);
+        if ($newBed->ward_id != $data['new_ward_id']) {
+            return back()->withErrors(['new_bed_id' => 'Selected bed is not in that ward.'])->withInput();
+        }
+        if ($newBed->id === $admission->bed_id) {
+            return back()->withErrors(['new_bed_id' => 'Patient is already in this bed.'])->withInput();
+        }
         if ($newBed->status !== 'available') {
             return back()->withErrors(['new_bed_id' => 'Selected bed is not available.'])->withInput();
         }
@@ -374,16 +431,36 @@ class AdmissionController extends Controller
             $oldBed  = $admission->bed;
             $oldWard = $admission->ward;
 
+            $admission->bedTransfers()->create([
+                'from_ward_id'   => $oldWard->id,
+                'from_bed_id'    => $oldBed?->id,
+                'to_ward_id'     => $newBed->ward_id,
+                'to_bed_id'      => $newBed->id,
+                'transferred_at' => now(),
+                'reason'         => $data['reason'] ?? null,
+                'transferred_by' => auth()->id(),
+            ]);
             $admission->update([
-                'ward_id' => $data['new_ward_id'],
-                'bed_id'  => $data['new_bed_id'],
+                'ward_id' => $newBed->ward_id,
+                'bed_id'  => $newBed->id,
             ]);
 
-            $oldBed->update(['status' => 'available']);
+            // Today's room rent already charged at a lower rate → raise it to the new ward's rate
+            $today = \App\Models\IpdCharge::where('admission_id', $admission->id)->where('category', 'room_rent')
+                ->whereDate('charge_date', today())->where('notes', 'Auto-generated')->first();
+            if ($today) {
+                $charge = (new \App\Services\RoomRent())->forDate($admission->fresh(), today());
+                if ($charge && $charge['rate'] > (float) $today->unit_price) {
+                    $today->update(['description' => $charge['description'], 'unit_price' => $charge['rate'],
+                        'amount' => $charge['rate'] * (float) $today->quantity]);
+                }
+            }
+
+            $oldBed?->update(['status' => 'cleaning']);
             $newBed->update(['status' => 'occupied']);
 
-            $note = "Ward transfer: {$oldWard->name} Bed {$oldBed->bed_number} → {$newBed->ward->name} Bed {$newBed->bed_number}";
-            if ($data['reason']) $note .= ". Reason: {$data['reason']}";
+            $note = "Ward transfer: {$oldWard->name} Bed " . ($oldBed->bed_number ?? '—') . " → {$newBed->ward->name} Bed {$newBed->bed_number}";
+            if (!empty($data['reason'])) $note .= ". Reason: {$data['reason']}";
 
             $admission->notes()->create([
                 'type'       => 'nursing',

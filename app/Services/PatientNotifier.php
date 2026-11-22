@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Appointment;
 use App\Models\Bill;
 use App\Models\EchoRecord;
+use App\Models\LabOrder;
 use App\Models\Patient;
 use App\Models\Prescription;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -61,7 +62,8 @@ class PatientNotifier
 
     public function dispatchTeleconsultLink(Appointment $appt, bool $patientEmail, bool $patientWA, bool $adminWA): void
     {
-        $clinic    = setting('clinic_name', config('app.name', 'Demo Clinic'));
+        $clinic    = setting('clinic_name', config('app.name', 'James Heart Care'));
+        $clinicSig = clinic_signature();
         $patient   = $appt->patient;
         $doctor    = $appt->doctor->full_name ?? 'Doctor';
         $date      = optional($appt->appointment_date)->format('d M Y') ?: '—';
@@ -75,12 +77,12 @@ class PatientNotifier
                    . "Your video consultation with {$doctor} is confirmed for {$when}.\n\n"
                    . "Join the call here at the appointment time:\n{$url}\n\n"
                    . "Tips: use a recent browser (Chrome/Edge/Safari), allow camera + microphone when prompted, and join 2-3 minutes early. If anything doesn't work, call the clinic.\n\n"
-                   . "— {$clinic}";
+                   . "— {$clinicSig}";
 
         $bodyWA    = "Hi " . ($patient->full_name ?: 'there') . ",\n\n"
                    . "Your video consultation with {$doctor} is confirmed for {$when}.\n\n"
                    . "Join: {$url}\n\n"
-                   . "— {$clinic}";
+                   . "— {$clinicSig}";
 
         // Patient channels
         if ($patientEmail && $patient->email) {
@@ -93,7 +95,7 @@ class PatientNotifier
                 $this->wa->sendTemplateToPatient(
                     $patient,
                     'teleconsult_link',
-                    [$patient->full_name ?: 'patient', $doctor, $when, $url, $clinic],
+                    [$patient->full_name ?: 'patient', $doctor, $when, $url, $clinicSig],
                     $bodyWA,
                     'teleconsult_link',
                 );
@@ -141,7 +143,8 @@ class PatientNotifier
     /** Heavy lifting for bill_created — runs in afterResponse(). */
     public function dispatchBillCreated(Bill $bill, bool $patientEmail, bool $patientWA, bool $adminEmail, bool $adminWA): void
     {
-        $clinic  = setting('clinic_name', config('app.name', 'Demo Clinic'));
+        $clinic  = setting('clinic_name', config('app.name', 'James Heart Care'));
+        $clinicSig = clinic_signature();
         $patient = $bill->patient;
 
         // Render the bill PDF once; reuse across channels.
@@ -174,14 +177,14 @@ class PatientNotifier
                           . ($bill->due_amount > 0
                               ? "Please clear the dues at your next visit or via the payment options shared at the clinic.\n\n"
                               : "Thank you for your payment.\n\n")
-                          . "— {$clinic}";
+                          . "— {$clinicSig}";
 
         $bodyWAPatient = "Hi " . ($patient->full_name ?: 'there') . ",\n\n"
                        . "Your bill {$bill->bill_no} for {$total}"
                        . ($bill->due_amount > 0 ? " ({$due} due)" : "")
                        . " has been generated."
                        . ($pdfUrl ? "\n\nBill: {$pdfUrl}" : '')
-                       . "\n\n— {$clinic}";
+                       . "\n\n— {$clinicSig}";
 
         // Patient channels
         if ($patientEmail && $patient->email) {
@@ -198,7 +201,7 @@ class PatientNotifier
                 $this->wa->sendTemplateToPatient(
                     $patient,
                     'bill_created',
-                    [$patient->full_name ?: 'patient', $bill->bill_no, $total, $due, $clinic],
+                    [$patient->full_name ?: 'patient', $bill->bill_no, $total, $due, $clinicSig],
                     $bodyWAPatient,
                     'bill_created',
                 );
@@ -271,7 +274,8 @@ class PatientNotifier
     /** Heavy lifting for bill_overdue. Called directly from CLI to bypass afterResponse. */
     public function dispatchBillOverdueReminder(Bill $bill, bool $patientEmail, bool $patientWA, bool $adminEmail, bool $adminWA): void
     {
-        $clinic  = setting('clinic_name', config('app.name', 'Demo Clinic'));
+        $clinic  = setting('clinic_name', config('app.name', 'James Heart Care'));
+        $clinicSig = clinic_signature();
         $patient = $bill->patient;
 
         $due       = '₹' . number_format((float) $bill->due_amount, 2);
@@ -285,12 +289,12 @@ class PatientNotifier
                    . "This is a friendly reminder that bill {$bill->bill_no} for {$due} (dated {$billDate}) is still outstanding.\n\n"
                    . "Please clear the dues at your next visit or via the payment options shared at the clinic.\n\n"
                    . "If you've already paid, please ignore this message.\n\n"
-                   . "Thank you,\n— {$clinic}";
+                   . "Thank you,\n— {$clinicSig}";
 
         $bodyWA = "Hi " . ($patient->full_name ?: 'there') . ",\n\n"
                 . "Reminder: bill {$bill->bill_no} of {$due} dated {$billDate} is still outstanding.\n\n"
                 . "Please clear at your next visit or via the payment options shared at the clinic.\n\n"
-                . "— {$clinic}";
+                . "— {$clinicSig}";
 
         // Patient channels
         if ($patientEmail && $patient->email) {
@@ -304,7 +308,7 @@ class PatientNotifier
                 $this->wa->sendTemplateToPatient(
                     $patient,
                     'billing',
-                    [$patient->full_name ?: 'patient', (string) $bill->bill_no, $amountRaw, $billDate, $clinic],
+                    [$patient->full_name ?: 'patient', (string) $bill->bill_no, $amountRaw, $billDate, $clinicSig],
                     $bodyWA,
                     'bill_overdue',
                 );
@@ -357,7 +361,8 @@ class PatientNotifier
     /** Heavy lifting for bill_paid — runs in afterResponse(). */
     public function dispatchBillPaid(Bill $bill, bool $patientEmail, bool $patientWA, bool $adminEmail, bool $adminWA): void
     {
-        $clinic = setting('clinic_name', config('app.name', 'Demo Clinic'));
+        $clinic = setting('clinic_name', config('app.name', 'James Heart Care'));
+        $clinicSig = clinic_signature();
         $patient = $bill->patient;
 
         // Build the receipt PDF once; reuse for email + WhatsApp link.
@@ -379,12 +384,12 @@ class PatientNotifier
         $amount  = '₹' . number_format((float) $bill->paid_amount, 2);
         $bodyEmail = "Dear " . ($patient->full_name ?: 'patient') . ",\n\n"
                    . "We've received your payment of {$amount} for bill {$bill->bill_no}.\n"
-                   . "Receipt attached.\n\nThank you,\n— {$clinic}";
+                   . "Receipt attached.\n\nThank you,\n— {$clinicSig}";
 
         $bodyWA = "Hi " . ($patient->full_name ?: 'there') . ",\n\n"
                 . "Payment of {$amount} received for bill {$bill->bill_no}. Thank you!"
                 . ($pdfUrl ? "\n\nReceipt: {$pdfUrl}" : '')
-                . "\n\n— {$clinic}";
+                . "\n\n— {$clinicSig}";
 
         // Patient channels
         if ($patientEmail && $patient->email) {
@@ -397,7 +402,7 @@ class PatientNotifier
                 $this->wa->sendTemplateToPatient(
                     $patient,
                     'bill_paid',
-                    [$patient->full_name ?: 'patient', $bill->bill_no, $amount, $clinic],
+                    [$patient->full_name ?: 'patient', $bill->bill_no, $amount, $clinicSig],
                     $bodyWA,
                     'bill_paid',
                 );
@@ -453,7 +458,8 @@ class PatientNotifier
 
     public function dispatchPrescription(Prescription $rx, bool $patientEmail, bool $patientWA, bool $adminEmail, bool $adminWA): void
     {
-        $clinic = setting('clinic_name', config('app.name', 'Demo Clinic'));
+        $clinic = setting('clinic_name', config('app.name', 'James Heart Care'));
+        $clinicSig = clinic_signature();
         $patient = $rx->patient;
         $doctor  = $rx->doctor->full_name ?? 'Doctor';
 
@@ -473,12 +479,12 @@ class PatientNotifier
         $bodyEmail = "Dear " . ($patient->full_name ?: 'patient') . ",\n\n"
                    . "Your prescription from {$doctor} is attached.\nPrescription No: {$rx->prescription_no}\n"
                    . "Please follow the directions and return to clinic if you have any questions.\n\n"
-                   . "— {$clinic}";
+                   . "— {$clinicSig}";
 
         $bodyWA = "Hi " . ($patient->full_name ?: 'there') . ",\n\n"
                 . "Your prescription from {$doctor} is ready ({$rx->prescription_no})."
                 . ($pdfUrl ? "\n\nView: {$pdfUrl}" : '')
-                . "\n\n— {$clinic}";
+                . "\n\n— {$clinicSig}";
 
         if ($patientEmail && $patient->email) {
             $this->mailWithPdf($patient->email, $subject, $bodyEmail, $pdfBytes, "Prescription-{$rx->prescription_no}.pdf");
@@ -538,7 +544,8 @@ class PatientNotifier
 
     public function dispatchEchoReport(EchoRecord $echo, bool $patientEmail, bool $patientWA, bool $adminEmail, bool $adminWA): void
     {
-        $clinic  = setting('clinic_name', config('app.name', 'Demo Clinic'));
+        $clinic  = setting('clinic_name', config('app.name', 'James Heart Care'));
+        $clinicSig = clinic_signature();
         $patient = $echo->patient;
         $doctor  = $echo->doctor->full_name ?? 'Cardiologist';
         $ef      = $echo->ef_percent ? (str_contains((string) $echo->ef_percent, '%') ? $echo->ef_percent : $echo->ef_percent . '%') : '—';
@@ -566,12 +573,12 @@ class PatientNotifier
                           . "Date: " . optional($echo->record_date)->format('d M Y') . "\n"
                           . "EF: {$ef}\n\n"
                           . "Impression: {$impression}\n\n"
-                          . "Please contact us if you have any questions.\n\n— {$clinic}";
+                          . "Please contact us if you have any questions.\n\n— {$clinicSig}";
 
         $bodyWAPatient = "Hi " . ($patient->full_name ?: 'there') . ",\n\n"
                        . "Your Echo report from {$doctor} is ready ({$echo->record_no}).\nEF: {$ef}"
                        . ($pdfUrl ? "\n\nView report: {$pdfUrl}" : '')
-                       . "\n\n— {$clinic}";
+                       . "\n\n— {$clinicSig}";
 
         if ($patientEmail && $patient->email) {
             $this->mailWithPdf($patient->email, $subject, $bodyEmailPatient, $pdfBytes, "Echo-{$echo->record_no}.pdf");
@@ -602,6 +609,95 @@ class PatientNotifier
                      . "Impression: {$impression}"
                      . ($pdfUrl ? "\nPDF: {$pdfUrl}" : '');
             $this->wa->sendOwnerAlert($waAdmin, 'owner_echo_report', $patient);
+        }
+    }
+
+    // ───────────────────────── Lab result ─────────────────────────
+
+    /**
+     * Auto-fired when a lab order's status moves to Completed (see
+     * LabController::updateStatus). Each channel gated by the
+     * lab_result_ready prefs, same as bill/echo. Manual re-send from the
+     * lab order page goes through EmailDocumentController /
+     * WhatsAppDocumentController instead and is NOT gated by prefs.
+     */
+    public function sendLabResult(LabOrder $order): array
+    {
+        $order->loadMissing(['patient', 'doctor']);
+        if (!$order->patient) return ['ok' => false, 'reason' => 'no_patient'];
+
+        $eventKey = 'lab_result_ready';
+        $sendPatientEmail = $this->prefs->shouldSend($eventKey, 'patient', 'email');
+        $sendPatientWA    = $this->prefs->shouldSend($eventKey, 'patient', 'whatsapp');
+        $sendAdminEmail   = $this->prefs->shouldSend($eventKey, 'admin',   'email');
+        $sendAdminWA      = $this->prefs->shouldSend($eventKey, 'admin',   'whatsapp');
+        if (!($sendPatientEmail || $sendPatientWA || $sendAdminEmail || $sendAdminWA)) {
+            return ['ok' => false, 'reason' => 'all_channels_off_in_prefs'];
+        }
+
+        $self = $this;
+        dispatch(function () use ($self, $order, $sendPatientEmail, $sendPatientWA, $sendAdminEmail, $sendAdminWA) {
+            $self->dispatchLabResult($order, $sendPatientEmail, $sendPatientWA, $sendAdminEmail, $sendAdminWA);
+        })->afterResponse();
+
+        return ['ok' => true, 'channels' => array_filter([
+            $sendPatientEmail ? 'patient_email' : null,
+            $sendPatientWA    ? 'patient_whatsapp' : null,
+            $sendAdminEmail   ? 'admin_email' : null,
+            $sendAdminWA      ? 'admin_whatsapp' : null,
+        ])];
+    }
+
+    public function dispatchLabResult(LabOrder $order, bool $patientEmail, bool $patientWA, bool $adminEmail, bool $adminWA): void
+    {
+        $clinic  = setting('clinic_name', config('app.name', 'James Heart Care'));
+        $clinicSig = clinic_signature();
+        $patient = $order->patient;
+        $doctor  = $order->doctor->full_name ?? 'Doctor';
+
+        try {
+            $order->loadMissing(['items.test', 'items.results']);
+            $pdf = Pdf::loadView('lab.report-print', ['order' => $order]);
+            $pdfBytes = $pdf->output();
+        } catch (\Throwable $e) {
+            Log::warning("PatientNotifier::lab_result PDF gen failed for order #{$order->id}: " . $e->getMessage());
+            $pdfBytes = null;
+        }
+
+        $pdfUrl = ($pdfBytes && ($patientWA || $adminWA))
+            ? $this->storeForLink($pdfBytes, 'lab', "lab-{$order->order_no}")
+            : null;
+
+        $subject = "Your lab report — {$order->order_no} · {$clinic}";
+
+        $bodyEmailPatient = "Dear " . ($patient->full_name ?: 'patient') . ",\n\n"
+                          . "Your lab report ordered by {$doctor} is ready.\n"
+                          . "Order No: {$order->order_no}\n\n"
+                          . "Please contact us if you have any questions.\n\n— {$clinicSig}";
+
+        $bodyWAPatient = "Hi " . ($patient->full_name ?: 'there') . ",\n\n"
+                       . "Your lab report ({$order->order_no}) ordered by {$doctor} is ready."
+                       . ($pdfUrl ? "\n\nView report: {$pdfUrl}" : '')
+                       . "\n\n— {$clinicSig}";
+
+        if ($patientEmail && $patient->email) {
+            $this->mailWithPdf($patient->email, $subject, $bodyEmailPatient, $pdfBytes, "Lab-Report-{$order->order_no}.pdf");
+        }
+        if ($patientWA) {
+            $this->wa->sendToPatient($patient, $bodyWAPatient, 'lab_result_ready');
+        }
+
+        if ($adminEmail) {
+            $to = config('admin_notify.email');
+            if ($to) {
+                $adminBody = "Lab report ready:\n  No: {$order->order_no}\n  Patient: {$patient->full_name} (" . ($patient->jhc_id ?? '—') . ")\n  Doctor: {$doctor}";
+                $this->mailWithPdf($to, "[SC] Lab report ready — {$order->order_no}", $adminBody, $pdfBytes, "Lab-Report-{$order->order_no}.pdf");
+            }
+        }
+        if ($adminWA) {
+            $waAdmin = "🧪 Lab report ready\nNo: {$order->order_no}\nPatient: {$patient->full_name}\nDoctor: {$doctor}"
+                     . ($pdfUrl ? "\nPDF: {$pdfUrl}" : '');
+            $this->wa->sendOwnerAlert($waAdmin, 'owner_lab_result_ready', $patient);
         }
     }
 

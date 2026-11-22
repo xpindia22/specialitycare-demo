@@ -9,6 +9,7 @@
         <h1>Edit Echo — <span class="mono">{{ $echo->record_no }}</span></h1>
         <div class="breadcrumb"><a href="{{ route('echo.index') }}">Echo</a> &rsaquo; <a href="{{ route('echo.show',$echo) }}">{{ $echo->record_no }}</a> &rsaquo; Edit</div>
     </div>
+    @include('diagnostics._toolbar', ['inline'=>true])
 </div>
 
 <form method="POST" action="{{ route('echo.update', $echo) }}" enctype="multipart/form-data">
@@ -16,7 +17,7 @@
 @method('PUT')
 <div class="row g-4">
 <div class="col-lg-9">
-    @include('echo._form', ['isEdit' => true, 'echo' => $echo, 'doctors' => $doctors])
+    @include('echo._form', ['isEdit' => true, 'echo' => $echo, 'doctors' => $doctors, 'referralSources' => $referralSources ?? collect()])
 </div>
 <div class="col-lg-3">
     <div class="card" style="position:sticky;top:80px">

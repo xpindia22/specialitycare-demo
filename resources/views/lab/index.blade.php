@@ -5,9 +5,13 @@
 @section('content')
 <div class="page-header">
     <div class="page-header-left"><h1>Laboratory</h1><div class="breadcrumb">Lab orders & results</div></div>
-    <a href="{{ route('lab.create-order') }}" class="btn btn-primary"><i class="fa-solid fa-plus"></i> New Lab Order</a>
-    <a href="{{ route('settings.index', ['tab' => 'lab']) }}" class="btn btn-outline"><i class="fa-solid fa-flask-vial"></i> Tests & Pricing</a>
-    <a href="{{ route('settings.index', ['tab' => 'panels']) }}" class="btn btn-outline"><i class="fa-solid fa-layer-group"></i> Panels</a>
+    @include('diagnostics._toolbar', ['inline'=>true, 'extra' => [
+        ['url'=>route('lab.create-order'), 'icon'=>'fa-plus', 'label'=>'New Lab Order', 'bg'=>'#047857'],
+        ['url'=>route('lab.report.upload'), 'icon'=>'fa-file-arrow-up', 'label'=>'Upload Lab Report', 'bg'=>'#7c3aed'],
+        ['url'=>route('lab.pending'), 'icon'=>'fa-inbox', 'label'=>'Pending Reports'.(($pendingCount ?? 0) ? ' ('.$pendingCount.')' : ''), 'bg'=>(($pendingCount ?? 0) ? '#b45309' : '#64748b')],
+        ['url'=>route('settings.index', ['tab' => 'lab']), 'icon'=>'fa-flask-vial', 'label'=>'Tests & Pricing', 'bg'=>'#4b5563'],
+        ['url'=>route('settings.index', ['tab' => 'panels']), 'icon'=>'fa-layer-group', 'label'=>'Panels', 'bg'=>'#64748b'],
+    ]])
 </div>
 
 <div class="grid grid-4 mb-4">

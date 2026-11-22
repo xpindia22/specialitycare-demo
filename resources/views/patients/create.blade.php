@@ -8,6 +8,7 @@
         <h1>Register New Patient</h1>
         <div class="breadcrumb"><a href="{{ route('patients.index') }}">Patients</a> › Register</div>
     </div>
+    @include('reception._toolbar', ['inline'=>true])
 </div>
 
 <form method="POST" action="{{ route('patients.store') }}" enctype="multipart/form-data">

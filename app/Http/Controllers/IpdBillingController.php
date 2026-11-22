@@ -64,12 +64,21 @@ class IpdBillingController extends Controller
             'payment_method'  => 'required|in:cash,card,upi,cheque,other',
             'transaction_ref' => 'nullable|string|max:200',
             'notes'           => 'nullable|string|max:500',
+            'payment_date'    => 'nullable|date|before_or_equal:today',
         ]);
 
+        $paymentDate = $data['payment_date'] ?? null;
+        unset($data['payment_date']);
         $data['admission_id'] = $admission->id;
         $data['received_by']  = auth()->id();
 
-        IpdDeposit::create($data);
+        // ipd_deposits has no payment_date column; reports/history use created_at,
+        // so a back-dated entry keeps the current time on the chosen day.
+        $deposit = new IpdDeposit($data);
+        if ($paymentDate && $paymentDate !== today()->toDateString()) {
+            $deposit->created_at = \Carbon\Carbon::parse($paymentDate)->setTimeFrom(now());
+        }
+        $deposit->save();
 
         ActivityLog::log('IPD Deposit', "Deposit ₹{$data['amount']} received for admission {$admission->ipd_no}");
 

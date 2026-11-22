@@ -3,10 +3,10 @@
 @section('title','Billing')
 @section('page-title','Billing')
 @section('content')
+
 <div class="page-header">
     <div class="page-header-left"><h1>Billing</h1><div class="breadcrumb">Patient bills & payments</div></div>
-    <a href="{{ route('billing.create') }}" class="btn btn-primary"><i class="fa-solid fa-file-invoice"></i> Create Bill</a>
-    <a href="{{ route('billing.daily') }}" class="btn btn-outline"><i class="fa-solid fa-calendar-day"></i> Daily Report</a>
+    @include('billing._toolbar', ['inline'=>true])
 </div>
 
 <div class="grid grid-4 mb-4">
@@ -39,7 +39,8 @@
             <thead><tr><th>Bill No.</th><th>Patient</th><th>Date</th><th>Total</th><th>Paid</th><th>Due</th><th>Status</th><th>Action</th></tr></thead>
             <tbody>
             @forelse($pendingBills as $b)
-            <tr>
+            <tr style="cursor:pointer"
+                onclick="if(!event.target.closest('a,button,form,input,select,label')) location='{{ route('billing.show', $b) }}'">
                 <td class="mono fw-600"><a href="{{ route('billing.show', $b) }}" style="color:var(--sc-navy);text-decoration:none">{{ $b->bill_no }}</a></td>
                 <td>{{ $b->patient?->full_name ?? '—' }}<div class="text-small text-muted mono">{{ $b->patient?->jhc_id ?? '' }}</div></td>
                 <td>{{ $b->bill_date->format('d M Y') }}</td>
@@ -78,7 +79,8 @@
             <thead><tr><th>Bill No.</th><th>Patient</th><th>Date</th><th>Items</th><th>Total</th><th>Paid</th><th>Due</th><th>Status</th><th>Action</th></tr></thead>
             <tbody>
             @forelse($bills as $b)
-            <tr>
+            <tr style="cursor:pointer"
+                onclick="if(!event.target.closest('a,button,form,input,select,label')) location='{{ route('billing.show', $b) }}'">
                 <td class="mono fw-600">{{ $b->bill_no }}</td>
                 <td>
                     <a href="{{ route('patients.show', $b->patient) }}" style="color:var(--sc-navy);font-weight:600;text-decoration:none">{{ $b->patient->full_name }}</a>

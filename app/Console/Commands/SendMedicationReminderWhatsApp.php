@@ -30,6 +30,7 @@ class SendMedicationReminderWhatsApp extends Command
         $limit  = $this->option('limit') !== null ? (int) $this->option('limit') : null;
         $dryRun = (bool) $this->option('dry-run');
         $clinic = setting('clinic_name', config('app.name', 'Speciality Care'));
+        $clinicSig = clinic_signature();
         $today  = now()->toDateString();
 
         $patients = Patient::where('is_active', true)
@@ -48,7 +49,7 @@ class SendMedicationReminderWhatsApp extends Command
             if ($already) { $skipped++; continue; }
 
             $name = $p->full_name ?: 'there';
-            $body = "Good morning {$name},\n\nPlease remember to take your morning medicines as prescribed by {$clinic}.\n\nReply STOP to opt out of daily reminders.\n[ref:{$key}]";
+            $body = "Good morning {$name},\n\nPlease remember to take your morning medicines as prescribed by {$clinicSig}.\n\nReply STOP to opt out of daily reminders.\n[ref:{$key}]";
 
             if ($dryRun) {
                 $sent++;
@@ -57,7 +58,7 @@ class SendMedicationReminderWhatsApp extends Command
             }
 
             // Template medication_reminder: {{1}} name, {{2}} clinic.
-            $r = $wa->sendTemplateToPatient($p, 'medication_reminder', [$name, $clinic], $body, 'medication_reminder');
+            $r = $wa->sendTemplateToPatient($p, 'medication_reminder', [$name, $clinicSig], $body, 'medication_reminder');
             if ($r['ok'] ?? false) { $sent++; }
             else { $skipped++; }
         }

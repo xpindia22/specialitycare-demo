@@ -6,6 +6,8 @@ use App\Models\EcgRecord;
 use App\Models\EncounterReport;
 use App\Models\Patient;
 use App\Models\Doctor;
+use App\Models\ReferralSource;
+use App\Models\ReferralPayment;
 
 class EcgController extends Controller
 {
@@ -49,17 +51,18 @@ class EcgController extends Controller
         $records = $query->paginate(20)->appends($request->only('patient_id','q'));
         $filterPatient = $request->patient_id ? Patient::find($request->patient_id) : null;
         $traceUploads = $request->patient_id
-            ? EncounterReport::with('encounter')->where('patient_id', $request->patient_id)->where('report_type', 'ECG Trace')->latest()->get()
+            ? EncounterReport::with('encounter')->whereHas('encounter')->where('patient_id', $request->patient_id)->where('report_type', 'ECG Trace')->latest()->get()
             : collect();
         return view('ecg.index', compact('records','filterPatient','traceUploads','q'));
     }
 
     public function create(Request $request) {
-        $patients = Patient::where('is_active',true)->orderBy('first_name')->get();
-        $doctors  = Doctor::where('is_active',true)->orderBy('first_name')->get();
-        $patient  = $request->patient_id ? Patient::find($request->patient_id) : null;
+        $patients        = Patient::where('is_active',true)->orderBy('first_name')->get();
+        $doctors         = Doctor::where('is_active',true)->orderBy('first_name')->get();
+        $patient         = $request->patient_id ? Patient::find($request->patient_id) : null;
+        $referralSources = ReferralSource::where('is_active',true)->orderBy('name')->get();
         $price = 250;
-        return view('ecg.create', compact('patients','doctors','patient','price'));
+        return view('ecg.create', compact('patients','doctors','patient','price','referralSources'));
     }
 
     public function store(Request $request) {
@@ -80,8 +83,61 @@ class EcgController extends Controller
         }
         $ecg = EcgRecord::create($data);
         $ecg->load('patient');
+        $this->maybeCreateReferralIncentive($ecg);
         ActivityLog::log('created', "Created ECG record {$ecg->record_no} for patient {$ecg->patient->full_name}");
         return redirect()->route('ecg.show', $ecg)->with('success','ECG record saved.');
+    }
+
+    /**
+     * Flat referral incentive for every ECG referred in (rate configurable in
+     * Settings, default ₹100) — every time, unlike the one-time consultation bonus.
+     */
+    protected function maybeCreateReferralIncentive(EcgRecord $ecg): void
+    {
+        if (!$ecg->referral_source_id) return;
+        $rate = (float) setting('referral_rate_ecg', 100);
+        if ($rate <= 0) return;
+        ReferralPayment::create([
+            'referral_source_id' => $ecg->referral_source_id,
+            'patient_id'         => $ecg->patient_id,
+            'calculated_amount'  => $rate,
+            'paid_amount'        => 0,
+            'status'             => 'pending',
+            'notes'              => "Auto ECG referral incentive for record {$ecg->record_no}",
+            'created_by'         => auth()->id(),
+        ]);
+    }
+
+    /**
+     * Auto-read an ECG file (newly chosen in the form, or the record's saved
+     * file) and return the extracted parameters as JSON for the edit/create
+     * form to pre-fill. Values are a DRAFT — the doctor reviews and saves.
+     */
+    public function read(Request $request) {
+        $request->validate([
+            'ecg_file' => 'nullable|file|mimes:jpeg,jpg,png,gif,pdf,bmp,tiff|max:20480',
+            'ecg_id'   => 'nullable|exists:ecg_records,id',
+        ]);
+
+        $path = null; $ext = '';
+        if ($request->hasFile('ecg_file')) {
+            $file = $request->file('ecg_file');
+            $path = $file->getRealPath();
+            $ext  = strtolower($file->getClientOriginalExtension());
+        } elseif ($request->ecg_id) {
+            $ecg = EcgRecord::find($request->ecg_id);
+            if ($ecg && $ecg->ecg_file) {
+                $abs = public_path('storage/ecg_files/' . $ecg->ecg_file);
+                if (is_file($abs)) { $path = $abs; $ext = strtolower(pathinfo($ecg->ecg_file, PATHINFO_EXTENSION)); }
+            }
+        }
+
+        if (!$path) {
+            return response()->json(['ok' => false, 'error' => 'No ECG file to read — choose a file first.'], 422);
+        }
+
+        $result = \App\Services\EcgReader::read($path, $ext);
+        return response()->json($result, $result['ok'] ? 200 : 422);
     }
 
     public function destroyFile(EcgRecord $ecg) {
@@ -98,9 +154,10 @@ class EcgController extends Controller
     }
 
     public function edit(EcgRecord $ecg) {
-        $doctors = Doctor::where('is_active',true)->orderBy('first_name')->get();
+        $doctors         = Doctor::where('is_active',true)->orderBy('first_name')->get();
+        $referralSources = ReferralSource::where('is_active',true)->orderBy('name')->get();
         $price = $ecg->price;
-        return view('ecg.edit', compact('ecg','doctors','price'));
+        return view('ecg.edit', compact('ecg','doctors','price','referralSources'));
     }
 
     public function update(Request $request, EcgRecord $ecg) {

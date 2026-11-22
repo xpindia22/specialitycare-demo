@@ -3,6 +3,8 @@
 @section('title','Pharmacy')
 @section('page-title','Pharmacy')
 @section('content')
+
+@include('pharmacy._toolbar')
 <div class="page-header">
     <div class="page-header-left"><h1>Pharmacy Dashboard</h1><div class="breadcrumb">Medicine stock & dispensing</div></div>
     <a href="{{ route('pharmacy.purchases.create') }}" class="btn btn-primary"><i class="fa-solid fa-truck-ramp-box"></i> New Stock Receipt</a>

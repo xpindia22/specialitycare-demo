@@ -29,7 +29,7 @@ class SendAppointmentWhatsAppReminders extends Command
 
         $limit = $this->option('limit') !== null ? (int) $this->option('limit') : null;
         $dryRun = (bool) $this->option('dry-run');
-        $clinic = config('app.name', 'Speciality Care');
+        $clinicSig = clinic_signature();
 
         // Remind 2 days before AND 1 day before; each tracked by its own ref
         // key so an appointment can get both without re-sending.
@@ -74,7 +74,7 @@ class SendAppointmentWhatsAppReminders extends Command
                       . "Reminder: your appointment {$docClause} is {$lead}, {$when}.\n"
                       . "Appointment no: {$apptNo}\n\n"
                       . "Please arrive 10 minutes early. Reply if you need to reschedule.\n\n"
-                      . "— {$clinic}\n[ref:{$key}]";
+                      . "— {$clinicSig}\n[ref:{$key}]";
 
                 if ($dryRun) {
                     $sent++;
@@ -83,7 +83,7 @@ class SendAppointmentWhatsAppReminders extends Command
                 }
 
                 // Template appointment_reminder: {{1}} name, {{2}} "with Dr. X", {{3}} when, {{4}} appt no, {{5}} clinic.
-                $r = $wa->sendTemplateToPatient($a->patient, 'appointment_reminder', [$name, $docClause, $when, $apptNo, $clinic], $body, 'appointment_reminder');
+                $r = $wa->sendTemplateToPatient($a->patient, 'appointment_reminder', [$name, $docClause, $when, $apptNo, $clinicSig], $body, 'appointment_reminder');
                 if ($r['ok'] ?? false) { $sent++; $this->info("Reminded {$a->patient->phone} for appt #{$a->id} ({$lead})"); }
                 else { $skipped++; $this->warn("Skipped appt #{$a->id}: " . ($r['skipped'] ?? $r['error'] ?? '?')); }
             }
