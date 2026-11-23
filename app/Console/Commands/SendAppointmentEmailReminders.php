@@ -29,7 +29,7 @@ class SendAppointmentEmailReminders extends Command
         $clinic = setting('clinic_name', config('app.name', 'Speciality Care'));
         $clinicSig = clinic_signature();
         $phone  = setting('clinic_phone');
-        $cc     = setting('clinic_email') ?: 'xpindia@gmail.com';   // CC the owner/clinic
+        $cc     = setting('clinic_email') ?: 'demo@specialitycare.co.in';   // CC the owner/clinic
 
         // Lead times to remind at, each tracked separately so an appointment
         // can get both without the dedup blocking the second.

@@ -52,6 +52,12 @@
     </div>
     @endif
 
+    <div style="margin-bottom:22px;padding:14px 16px;border:1.5px solid #0ab4b4;border-radius:10px;background:#ecfeff;">
+        <div style="font-size:12.5px;font-weight:700;color:#0f766e;margin-bottom:10px;text-align:center;letter-spacing:.3px;">🔑 DEMO LOGIN — use these credentials</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:#475569;margin-bottom:6px;"><span>Email</span><code style="background:#fff;border:1px solid #99f6e4;border-radius:5px;padding:2px 8px;color:#0f1f3d;">demo@specialitycare.co.in</code></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:#475569;margin-bottom:6px;"><span>Password</span><code style="background:#fff;border:1px solid #99f6e4;border-radius:5px;padding:2px 8px;color:#0f1f3d;">Demo@1234</code></div>
+        <button type="button" onclick="var f=this.closest('form')||document;f.querySelector('[name=email]').value='demo@specialitycare.co.in';f.querySelector('[name=password]').value='Demo@1234';" style="width:100%;margin-top:8px;padding:8px;background:#0ab4b4;color:#fff;border:none;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;">Fill demo login →</button>
+    </div>
     <form method="POST" action="{{ route('login') }}">
     @csrf
     <div class="form-group">

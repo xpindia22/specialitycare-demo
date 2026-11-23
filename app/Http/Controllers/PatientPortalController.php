@@ -95,7 +95,7 @@ class PatientPortalController extends Controller
         $conversation->forceFill(['last_message_at' => now(), 'patient_read_at' => now()])->save();
 
         // Notify the clinic (async, non-blocking).
-        $to = setting('clinic_email') ?: 'xpindia@gmail.com';
+        $to = setting('clinic_email') ?: 'demo@specialitycare.co.in';
         try {
             dispatch(function () use ($to, $patient, $data) {
                 try {

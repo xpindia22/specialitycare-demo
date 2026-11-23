@@ -118,7 +118,7 @@ past the demo window — you need a purchased commercial license, which includes
 
 **To purchase or request a quote, contact:**
 
-- 📧 Email: **xpindia@gmail.com**
+- 📧 Email: **demo@specialitycare.co.in**
 - 🌐 Website: **https://specialitycare.co.in**
 
 > Do not rely on `MODULES_DEV_OVERRIDE` to bypass expiry — it exists only for

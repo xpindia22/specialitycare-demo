@@ -695,7 +695,7 @@ input:focus,select:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--tea
     <div class="card-b" style="font-size:13px;line-height:1.9;color:var(--muted)">
         <ol style="padding-left:18px">
             <li>Verify table counts above look correct</li>
-            <li>Open the main app at <a href="/specialitycare/" style="color:var(--teal)">/specialitycare/</a> and log in as <strong>xpindia@gmail.com</strong> / <strong>Admin@123</strong></li>
+            <li>Open the main app at <a href="/specialitycare/" style="color:var(--teal)">/specialitycare/</a> and log in as <strong>demo@specialitycare.co.in</strong> / <strong>Admin@123</strong></li>
             <li>Head to <a href="/specialitycare/import" style="color:var(--teal)">/specialitycare/import</a> for future imports via the web UI</li>
             <li><strong style="color:var(--red)">Delete this file:</strong> <code>public/setupxx.php</code></li>
         </ol>

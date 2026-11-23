@@ -146,7 +146,10 @@ class ModulesViewController extends Controller
         $license = app(LicenseService::class);
         $license->updateBuyerConfig([
             'public_key'    => $pubB64,
-            'heartbeat_url' => (string) config('modules.heartbeat_url', '') ?: 'https://jhcpl.in/specialitycare/api/license/heartbeat',
+            // Primary license-auth host is jamesheartcare.com (clinic domain). jhcpl.in
+            // points to the SAME server and keeps working for existing installs, so
+            // either host validates; new installs default to jamesheartcare.com.
+            'heartbeat_url' => (string) config('modules.heartbeat_url', '') ?: 'https://jamesheartcare.com/specialitycare/api/license/heartbeat',
         ]);
         $license->recordLicenseInstall(
             (int) ($payload['license_id'] ?? 0),

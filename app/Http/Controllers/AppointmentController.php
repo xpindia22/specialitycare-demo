@@ -354,7 +354,7 @@ class AppointmentController extends Controller
     {
         abort_unless($appointment->patient && $appointment->patient->email, 422, 'This patient has no email on file.');
         $clinic = setting('clinic_name', config('app.name', 'Speciality Care'));
-        $cc = setting('clinic_email') ?: 'xpindia@gmail.com';
+        $cc = setting('clinic_email') ?: 'demo@specialitycare.co.in';
         try {
             \Illuminate\Support\Facades\Mail::raw($this->reminderBody($appointment), function ($m) use ($appointment, $cc, $clinic) {
                 $m->to($appointment->patient->email)->subject("Appointment reminder — {$clinic} ({$appointment->appointment_date->format('d M Y')})");

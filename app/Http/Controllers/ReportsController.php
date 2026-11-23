@@ -950,7 +950,7 @@ class ReportsController extends Controller
         abort_unless($e->follow_up_date, 422, 'This encounter has no follow-up date.');
         abort_unless($e->patient && $e->patient->email, 422, 'This patient has no email on file.');
         $clinic = setting('clinic_name', config('app.name', 'Speciality Care'));
-        $cc = setting('clinic_email') ?: 'xpindia@gmail.com';
+        $cc = setting('clinic_email') ?: 'demo@specialitycare.co.in';
         try {
             \Illuminate\Support\Facades\Mail::raw($this->followUpBody($e), function ($m) use ($e, $cc, $clinic) {
                 $m->to($e->patient->email)->subject("Follow-up reminder — {$clinic}");
