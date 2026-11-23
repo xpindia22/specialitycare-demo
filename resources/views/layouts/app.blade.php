@@ -1847,17 +1847,17 @@ function escRec(s) {
 }
 function scTrackPatient(id, name, jhcId, url) {
     try {
-        let list = JSON.parse(localStorage.getItem('scRecentPatients') || '[]');
+        let list = JSON.parse(localStorage.getItem('scRecentPatients_demo') || '[]');
         list = list.filter(x => x.id !== id);
         list.unshift({ id, name, jhcId, url });
         if (list.length > SC_RECENT_MAX) list.length = SC_RECENT_MAX;
-        localStorage.setItem('scRecentPatients', JSON.stringify(list));
+        localStorage.setItem('scRecentPatients_demo', JSON.stringify(list));
         renderSidebarRecentPts();
     } catch(e) {}
 }
 function renderSidebarRecentPts() {
     try {
-        let list = JSON.parse(localStorage.getItem('scRecentPatients') || '[]');
+        let list = JSON.parse(localStorage.getItem('scRecentPatients_demo') || '[]');
         if (list.length > SC_RECENT_MAX) list = list.slice(0, SC_RECENT_MAX);
         const wrap = document.getElementById('nsw-recent-pts');
         const grp  = document.getElementById('ng-recent-pts');
@@ -1871,9 +1871,9 @@ function scRemoveRecentPt(ev, id) {
     ev.preventDefault();
     ev.stopPropagation();
     try {
-        let list = JSON.parse(localStorage.getItem('scRecentPatients') || '[]');
+        let list = JSON.parse(localStorage.getItem('scRecentPatients_demo') || '[]');
         list = list.filter(x => x.id !== id);
-        localStorage.setItem('scRecentPatients', JSON.stringify(list));
+        localStorage.setItem('scRecentPatients_demo', JSON.stringify(list));
         renderSidebarRecentPts();
     } catch(e) {}
     return false;
@@ -2136,12 +2136,12 @@ function closeCmdPalette() {
 }
 
 function cpRecent() {
-    try { return JSON.parse(sessionStorage.getItem('cpRecent') || '[]'); } catch(e) { return []; }
+    try { return JSON.parse(sessionStorage.getItem('cpRecent_demo') || '[]'); } catch(e) { return []; }
 }
 function cpAddRecent(item) {
     const list = cpRecent().filter(x => x.url !== item.url);
     list.unshift(item);
-    sessionStorage.setItem('cpRecent', JSON.stringify(list.slice(0, 6)));
+    sessionStorage.setItem('cpRecent_demo', JSON.stringify(list.slice(0, 6)));
 }
 
 function cpRender(serverResults) {
@@ -2151,7 +2151,7 @@ function cpRender(serverResults) {
 
     if (!q) {
         try {
-            const rp = JSON.parse(localStorage.getItem('scRecentPatients') || '[]');
+            const rp = JSON.parse(localStorage.getItem('scRecentPatients_demo') || '[]');
             if (rp.length) sections.push({ label: 'Recent Patients', items: rp.map(p => ({ label: p.name, sub: p.jhcId, icon: 'fa-user', url: p.url })) });
         } catch(e) {}
         const recent = cpRecent();
